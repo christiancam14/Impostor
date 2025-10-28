@@ -120,22 +120,20 @@ startGameButton.addEventListener('click', () => {
 });
 
 changeNameButton.addEventListener('click', () => {
-  if (confirm('¿Seguro que quieres cambiar tu nombre? Saldrás del lobby actual.')) {
-    // Limpiar estado del cliente
-    clientState.playerId = null;
-    clientState.playerName = null;
-    clientState.hasVoted = false;
-    
-    // Limpiar input
-    nameInput.value = '';
-    
-    // Desconectar y reconectar
-    socket.disconnect();
-    socket.connect();
-    
-    // Volver a la pantalla de login
-    showScreen('login');
-  }
+  // Limpiar estado del cliente
+  clientState.playerId = null;
+  clientState.playerName = null;
+  clientState.hasVoted = false;
+  
+  // Limpiar input
+  nameInput.value = '';
+  
+  // Desconectar y reconectar
+  socket.disconnect();
+  socket.connect();
+  
+  // Volver a la pantalla de login
+  showScreen('login');
 });
 
 socket.on('game-state-update', (state) => {
