@@ -54,8 +54,23 @@
               <p>2️⃣ Todos menos uno recibirán una palabra secreta</p>
               <p>3️⃣ Uno será el <strong>IMPOSTOR</strong></p>
               <p>4️⃣ Cada jugador dará sinónimos de su palabra</p>
-              <p>5️⃣ Después de 2 rondas, voten por el impostor</p>
+              <p>5️⃣ Después de las rondas, voten por el impostor</p>
             </div>
+            
+            <!-- Selector de rondas -->
+            <div class="rounds-selector">
+              <label for="rounds-input">
+                <span class="rounds-label">Número de rondas:</span>
+                <select id="rounds-input" class="rounds-select">
+                  <option value="1">1 ronda</option>
+                  <option value="2" selected>2 rondas</option>
+                  <option value="3">3 rondas</option>
+                  <option value="4">4 rondas</option>
+                  <option value="5">5 rondas</option>
+                </select>
+              </label>
+            </div>
+            
             <button id="start-game-button" class="btn-primary">Iniciar Juego</button>
           </div>
         </div>

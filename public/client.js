@@ -31,6 +31,7 @@ const playerCount = document.getElementById('player-count');
 const playersList = document.getElementById('players-list');
 const startGameButton = document.getElementById('start-game-button');
 const changeNameButton = document.getElementById('change-name-button');
+const roundsInput = document.getElementById('rounds-input');
 
 // Elementos del juego
 const roleDisplay = document.getElementById('role-display');
@@ -116,7 +117,8 @@ socket.on('join-success', (data) => {
 // =========================
 
 startGameButton.addEventListener('click', () => {
-  socket.emit('start-game');
+  const selectedRounds = parseInt(roundsInput.value);
+  socket.emit('start-game', { maxRounds: selectedRounds });
 });
 
 changeNameButton.addEventListener('click', () => {

@@ -362,7 +362,7 @@ io.on("connection", (socket) => {
   });
 
   // Iniciar juego
-  socket.on("start-game", () => {
+  socket.on("start-game", (data) => {
     if (gameState.status !== "lobby") {
       socket.emit("error", { message: "El juego ya está en curso" });
       return;
@@ -373,12 +373,16 @@ io.on("connection", (socket) => {
       return;
     }
 
+    // Obtener rondas configuradas o usar 2 por defecto
+    const maxRounds = data?.maxRounds || 2;
+
     // Reiniciar estado
     gameState.status = "playing";
     gameState.secretWord = getRandomWord();
     gameState.impostorId = selectRandomImpostor();
     gameState.currentTurnIndex = 0;
     gameState.currentRound = 1;
+    gameState.maxRounds = maxRounds; // Usar el valor configurado
     gameState.votes.clear();
 
     // Asignar roles
@@ -390,7 +394,7 @@ io.on("connection", (socket) => {
     console.log(
       `Juego iniciado. Palabra: ${gameState.secretWord}, Impostor: ${
         gameState.players.get(gameState.impostorId).name
-      }`
+      }, Rondas: ${maxRounds}`
     );
 
     sendPlayerRoles();
