@@ -503,6 +503,42 @@ io.on("connection", (socket) => {
     broadcastGameState();
   });
 
+  // Expulsar jugador
+  socket.on("kick-player", (data) => {
+    const { playerId } = data;
+    const kickedPlayer = gameState.players.get(playerId);
+    
+    if (!kickedPlayer) {
+      socket.emit("error", { message: "Jugador no encontrado" });
+      return;
+    }
+
+    const kickerPlayer = gameState.players.get(socket.id);
+    console.log(`${kickerPlayer?.name || "Alguien"} expulsó a ${kickedPlayer.name}`);
+
+    // Notificar al jugador expulsado
+    const kickedSocket = io.sockets.sockets.get(playerId);
+    if (kickedSocket) {
+      kickedSocket.emit("kicked", { 
+        message: "Has sido expulsado de la partida por otro jugador" 
+      });
+      kickedSocket.disconnect(true);
+    }
+
+    // Eliminar del juego
+    gameState.players.delete(playerId);
+
+    // Si el juego está en curso y quedan muy pocos jugadores, reiniciar
+    if (gameState.status !== "lobby" && gameState.players.size < 3) {
+      gameState.status = "lobby";
+      io.emit("game-reset", { 
+        message: "Juego reiniciado: no hay suficientes jugadores" 
+      });
+    }
+
+    broadcastGameState();
+  });
+
   // Desconexión
   socket.on("disconnect", () => {
     const player = gameState.players.get(socket.id);

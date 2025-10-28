@@ -261,8 +261,27 @@ button:disabled {
   font-weight: 500;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
   animation: slideIn 0.3s ease;
+}
+
+.player-name {
+  flex: 1;
+}
+
+.btn-kick {
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  border-radius: 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.btn-kick:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
 }
 
 @keyframes slideIn {
@@ -769,6 +788,12 @@ button:disabled {
   .player-item {
     padding: 12px 15px;
     font-size: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .btn-kick {
+    font-size: 0.8rem;
+    padding: 5px 10px;
   }
 
   .instructions {

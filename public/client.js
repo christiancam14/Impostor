@@ -179,14 +179,28 @@ function updatePlayersList(players) {
   players.forEach(player => {
     const playerItem = document.createElement('div');
     playerItem.className = 'player-item';
+    
     if (player.id === clientState.playerId) {
       playerItem.classList.add('you');
-      playerItem.innerHTML = `👤 ${player.name} <strong>(Tú)</strong>`;
+      playerItem.innerHTML = `
+        <span class="player-name">👤 ${player.name} <strong>(Tú)</strong></span>
+      `;
     } else {
-      playerItem.innerHTML = `👤 ${player.name}`;
+      playerItem.innerHTML = `
+        <span class="player-name">👤 ${player.name}</span>
+        <button class="btn-kick" onclick="kickPlayer('${player.id}', '${player.name}')">
+          ❌ Expulsar
+        </button>
+      `;
     }
     playersList.appendChild(playerItem);
   });
+}
+
+function kickPlayer(playerId, playerName) {
+  if (confirm(`¿Estás seguro de que quieres expulsar a ${playerName}?`)) {
+    socket.emit('kick-player', { playerId });
+  }
 }
 
 // =========================
@@ -402,6 +416,16 @@ socket.on('game-reset', (data) => {
   if (clientState.playerId) {
     showScreen('lobby');
   }
+});
+
+socket.on('kicked', (data) => {
+  alert(data.message);
+  // Limpiar estado y volver al login
+  clientState.playerId = null;
+  clientState.playerName = null;
+  clientState.hasVoted = false;
+  nameInput.value = '';
+  showScreen('login');
 });
 
 // =========================
