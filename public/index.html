@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Impostor - Juego de Palabras</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Pantalla de Login -->
+    <div id="login-screen" class="screen active">
+      <div class="login-box">
+        <h1>🕵️ IMPOSTOR</h1>
+        <p class="subtitle">Encuentra al impostor</p>
+        <div class="input-group">
+          <input 
+            type="text" 
+            id="name-input" 
+            placeholder="Ingresa tu nombre..." 
+            maxlength="20"
+            autocomplete="off"
+          >
+          <button id="join-button">Entrar</button>
+        </div>
+        <div class="connection-status">
+          <span id="connection-indicator" class="indicator disconnected"></span>
+          <span id="connection-text">Conectando...</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pantalla de Lobby -->
+    <div id="lobby-screen" class="screen">
+      <header>
+        <h1>🕵️ IMPOSTOR - Lobby</h1>
+        <div class="player-info">
+          <span id="player-name-display"></span>
+          <button id="change-name-button" class="btn-change-name">Cambiar Nombre</button>
+        </div>
+      </header>
+
+      <main>
+        <div class="lobby-content">
+          <div class="players-section">
+            <h2>Jugadores Conectados (<span id="player-count">0</span>)</h2>
+            <div id="players-list" class="players-list"></div>
+          </div>
+
+          <div class="info-section">
+            <h2>📋 Cómo Jugar</h2>
+            <div class="instructions">
+              <p>1️⃣ Se necesitan mínimo 3 jugadores</p>
+              <p>2️⃣ Todos menos uno recibirán una palabra secreta</p>
+              <p>3️⃣ Uno será el <strong>IMPOSTOR</strong></p>
+              <p>4️⃣ Cada jugador dará sinónimos de su palabra</p>
+              <p>5️⃣ Después de 2 rondas, voten por el impostor</p>
+            </div>
+            <button id="start-game-button" class="btn-primary">Iniciar Juego</button>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- Pantalla de Juego -->
+    <div id="game-screen" class="screen">
+      <header>
+        <h1>🕵️ IMPOSTOR</h1>
+        <div class="game-info">
+          <span class="round-info">Ronda: <span id="current-round">1</span>/<span id="max-rounds">2</span></span>
+        </div>
+      </header>
+
+      <main>
+        <div class="game-content">
+          <!-- Tu Rol -->
+          <div class="role-card">
+            <h2>Tu Rol</h2>
+            <div id="role-display" class="role-display">
+              <div class="waiting">Esperando...</div>
+            </div>
+          </div>
+
+          <!-- Turno Actual -->
+          <div class="turn-section">
+            <h2>Turno Actual</h2>
+            <div id="current-turn" class="current-turn-display">
+              <div class="waiting">Esperando...</div>
+            </div>
+            <button id="next-turn-button" class="btn-primary">Siguiente Turno</button>
+          </div>
+
+          <!-- Lista de Jugadores en Juego -->
+          <div class="game-players-section">
+            <h2>Jugadores</h2>
+            <div id="game-players-list" class="game-players-list"></div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- Pantalla de Votación de Ronda Extra -->
+    <div id="extra-round-screen" class="screen">
+      <header>
+        <h1>🤔 DECISIÓN</h1>
+      </header>
+
+      <main>
+        <div class="extra-round-content">
+          <h2>¿Desean hacer una ronda más antes de votar?</h2>
+          <p class="extra-round-description">Si no tienen claro quién es el impostor, pueden jugar una ronda adicional</p>
+          
+          <div class="extra-round-buttons">
+            <button id="vote-yes-extra" class="btn-extra-round btn-yes">
+              ✅ SÍ, una ronda más
+            </button>
+            <button id="vote-no-extra" class="btn-extra-round btn-no">
+              ❌ NO, votar ahora
+            </button>
+          </div>
+
+          <div id="extra-round-status" class="vote-status"></div>
+        </div>
+      </main>
+    </div>
+
+    <!-- Pantalla de Votación -->
+    <div id="voting-screen" class="screen">
+      <header>
+        <h1>🗳️ VOTACIÓN</h1>
+      </header>
+
+      <main>
+        <div class="voting-content">
+          <h2>¿Quién crees que es el impostor?</h2>
+          <div id="voting-players" class="voting-players"></div>
+          <div id="vote-status" class="vote-status"></div>
+        </div>
+      </main>
+    </div>
+
+    <!-- Pantalla de Resultados -->
+    <div id="results-screen" class="screen">
+      <header>
+        <h1>📊 RESULTADOS</h1>
+      </header>
+
+      <main>
+        <div class="results-content">
+          <div id="results-message" class="results-message"></div>
+          
+          <div class="results-info">
+            <div class="result-item">
+              <h3>🔍 El Impostor Era:</h3>
+              <p id="impostor-reveal" class="highlight"></p>
+            </div>
+            
+            <div class="result-item">
+              <h3>📝 La Palabra Secreta:</h3>
+              <p id="word-reveal" class="highlight"></p>
+            </div>
+            
+            <div class="result-item">
+              <h3>🗳️ Más Votado:</h3>
+              <p id="most-voted" class="highlight"></p>
+            </div>
+          </div>
+
+          <div class="votes-breakdown">
+            <h3>Desglose de Votos:</h3>
+            <div id="votes-list"></div>
+          </div>
+
+          <button id="new-game-button" class="btn-primary">Nueva Partida</button>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Socket.IO Client Library -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="client.js"></script>
+</body>
+</html>

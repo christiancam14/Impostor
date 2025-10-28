@@ -1,0 +1,21 @@
+{
+  "name": "impostor",
+  "version": "1.0.0",
+  "description": "Aplicación web con WebSockets usando Node.js, Express y Socket.IO",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["websocket", "socket.io", "express", "real-time"],
+  "author": "Christian Stiven Camacho Galvis",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.1.0",
+    "socket.io": "^4.8.1"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
