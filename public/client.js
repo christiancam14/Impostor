@@ -27,7 +27,9 @@ const clientState = {
   currentScreen: 'login',
   hasVoted: false,
   isHost: false,
-  hostId: null
+  hostId: null,
+  myRole: null, // 'impostor' o 'normal'
+  gameStatus: 'lobby' // Estado actual del juego: 'lobby', 'playing', 'voting', 'results', etc.
 };
 
 // =========================
@@ -60,6 +62,83 @@ function clearSavedPlayerName() {
   } catch (e) {
     console.error('Error al limpiar nombre:', e);
   }
+}
+
+// =========================
+// Toast Notifications (Sonner-style)
+// =========================
+
+function toast(message, type = 'info', duration = 4000) {
+  const container = document.getElementById('toast-container');
+  if (!container) {
+    console.warn('Toast container no encontrado');
+    return;
+  }
+
+  const toastEl = document.createElement('div');
+  toastEl.className = `toast ${type} progress`;
+  
+  // Iconos según el tipo
+  const icons = {
+    success: '✅',
+    error: '❌',
+    warning: '⚠️',
+    info: 'ℹ️'
+  };
+  
+  const icon = icons[type] || icons.info;
+  
+  toastEl.innerHTML = `
+    <span class="toast-icon">${icon}</span>
+    <span class="toast-content">${message}</span>
+    <button class="toast-close" aria-label="Cerrar">×</button>
+    <div class="toast-progress-bar" style="animation-duration: ${duration}ms;"></div>
+  `;
+  
+  container.appendChild(toastEl);
+  
+  // Función para cerrar el toast
+  const closeToast = () => {
+    toastEl.classList.add('slide-out');
+    setTimeout(() => {
+      if (toastEl.parentNode) {
+        toastEl.parentNode.removeChild(toastEl);
+      }
+    }, 300);
+  };
+  
+  // Botón de cerrar
+  const closeBtn = toastEl.querySelector('.toast-close');
+  closeBtn.addEventListener('click', closeToast);
+  
+  // Auto-cerrar después de la duración
+  const timeout = setTimeout(closeToast, duration);
+  
+  // Pausar el timeout al hacer hover
+  toastEl.addEventListener('mouseenter', () => {
+    clearTimeout(timeout);
+    const progressBar = toastEl.querySelector('.toast-progress-bar');
+    if (progressBar) {
+      progressBar.style.animationPlayState = 'paused';
+    }
+  });
+  
+  toastEl.addEventListener('mouseleave', () => {
+    const remainingTime = duration - (Date.now() - startTime);
+    if (remainingTime > 0) {
+      setTimeout(closeToast, remainingTime);
+      const progressBar = toastEl.querySelector('.toast-progress-bar');
+      if (progressBar) {
+        progressBar.style.animationPlayState = 'running';
+      }
+    }
+  });
+  
+  const startTime = Date.now();
+  
+  return {
+    dismiss: closeToast
+  };
 }
 
 // Elementos del DOM
@@ -111,6 +190,8 @@ const wordReveal = document.getElementById('word-reveal');
 const mostVoted = document.getElementById('most-voted');
 const votesList = document.getElementById('votes-list');
 const newGameButton = document.getElementById('new-game-button');
+const confettiContainer = document.getElementById('confetti-container');
+const darknessOverlay = document.getElementById('darkness-overlay');
 
 // =========================
 // Funciones de Navegación
@@ -120,6 +201,139 @@ function showScreen(screenName) {
   Object.values(screens).forEach(screen => screen.classList.remove('active'));
   screens[screenName].classList.add('active');
   clientState.currentScreen = screenName;
+}
+
+// Función para mostrar el rol en la UI
+function displayRole(roleData) {
+  if (!roleDisplay) {
+    console.error('❌ roleDisplay no encontrado en el DOM');
+    return;
+  }
+  
+  roleDisplay.innerHTML = '';
+  
+  if (roleData.role === 'impostor') {
+    console.log('🕵️ Mostrando rol: IMPOSTOR');
+    clientState.myRole = 'impostor'; // Guardar rol en el estado
+    const impostorDiv = document.createElement('div');
+    impostorDiv.className = 'role-impostor';
+    impostorDiv.textContent = '🎭 ERES EL IMPOSTOR 🎭';
+    roleDisplay.appendChild(impostorDiv);
+  } else if (roleData.word) {
+    console.log('📝 Mostrando palabra secreta:', roleData.word);
+    clientState.myRole = 'normal'; // Guardar rol en el estado
+    const wordDiv = document.createElement('div');
+    wordDiv.className = 'role-normal';
+    wordDiv.textContent = `📝 ${roleData.word}`;
+    roleDisplay.appendChild(wordDiv);
+  } else {
+    console.error('❌ No se recibió palabra secreta ni rol de impostor');
+  }
+}
+
+// Sincronizar estado del cliente con el estado del servidor
+function syncGameState(gameState, roleData) {
+  console.log('Sincronizando estado del juego:', gameState);
+  
+  // Actualizar estado del juego en el cliente
+  clientState.gameStatus = gameState.status || 'lobby';
+  
+  // Mostrar mensaje de sincronización si no estamos en lobby
+  if (gameState.status !== 'lobby') {
+    console.log('📡 Sincronizando con el estado actual del juego...');
+  }
+  
+  // Si viene el rol, mostrarlo primero
+  if (roleData) {
+    displayRole(roleData);
+  }
+  
+  // Actualizar lista de jugadores
+  if (gameState.players) {
+    updatePlayersList(gameState.players);
+  }
+  
+  // Determinar y mostrar la pantalla correcta según el estado
+  switch (gameState.status) {
+    case 'lobby':
+      showScreen('lobby');
+      break;
+      
+    case 'playing':
+      showScreen('game');
+      // Actualizar información del juego
+      if (currentRound) currentRound.textContent = gameState.currentRound || 1;
+      if (maxRounds) maxRounds.textContent = gameState.maxRounds || 2;
+      
+      // Actualizar turno actual
+      if (gameState.currentTurn) {
+        const currentPlayer = gameState.players?.find(p => p.id === gameState.currentTurn);
+        if (currentPlayer && currentTurnEl) {
+          currentTurnEl.textContent = currentPlayer.name;
+        }
+      }
+      
+      // Actualizar lista de jugadores en el juego
+      if (gameState.players && gamePlayersList) {
+        gamePlayersList.innerHTML = '';
+        gameState.players.forEach(player => {
+          const playerItem = document.createElement('div');
+          playerItem.className = 'game-player-item';
+          if (player.id === gameState.currentTurn) {
+            playerItem.classList.add('active-turn');
+          }
+          playerItem.textContent = player.name;
+          if (player.id === clientState.playerId) {
+            playerItem.textContent += ' (Tú)';
+          }
+          gamePlayersList.appendChild(playerItem);
+        });
+      }
+      break;
+      
+    case 'extra-round-vote':
+      showScreen('extraRound');
+      // Reiniciar estado de votación extra
+      extraRoundStatus.innerHTML = '<p>⏳ Esperando a que todos voten...</p>';
+      break;
+      
+    case 'voting':
+      showScreen('voting');
+      // Limpiar votos previos
+      clientState.hasVoted = false;
+      voteStatus.innerHTML = '<p>⏳ Esperando a que todos voten...</p>';
+      // Actualizar lista de jugadores para votar
+      if (gameState.players && votingPlayers) {
+        votingPlayers.innerHTML = '';
+        gameState.players.forEach(player => {
+          // No puedes votar por ti mismo
+          if (player.id === clientState.playerId) return;
+          
+          const button = document.createElement('button');
+          button.className = 'vote-button';
+          button.textContent = player.name;
+          button.onclick = () => {
+            if (clientState.hasVoted) return;
+            socket.emit('vote', { votedPlayerId: player.id });
+            clientState.hasVoted = true;
+            button.classList.add('voted');
+            button.disabled = true;
+            voteStatus.innerHTML = '<p>✅ Tu voto ha sido registrado</p>';
+          };
+          votingPlayers.appendChild(button);
+        });
+      }
+      break;
+      
+    case 'results':
+      // El estado de resultados se maneja con el evento 'game-results'
+      // No hacemos nada aquí para evitar mostrar resultados sin datos
+      showScreen('lobby');
+      break;
+      
+    default:
+      showScreen('lobby');
+  }
 }
 
 // =========================
@@ -165,7 +379,7 @@ nameInput.addEventListener('keypress', (e) => {
 function joinGame() {
   const name = nameInput.value.trim();
   if (!name) {
-    alert('Por favor ingresa tu nombre');
+    toast('Por favor ingresa tu nombre', 'warning');
     return;
   }
   
@@ -196,9 +410,24 @@ socket.on('join-success', (data) => {
   // Actualizar título de la página
   document.title = `Impostor - Sala: ${clientState.roomName}`;
   
-  showScreen('lobby');
+  // Si viene el rol incluido (reconexión durante partida), procesarlo ANTES de sincronizar
+  if (data.role) {
+    console.log('🎭 Rol recibido en join-success:', data.role);
+    displayRole(data.role);
+  }
   
-  // Actualizar controles según si es host
+  // SINCRONIZACIÓN DE ESTADO: Mostrar la pantalla correcta según el estado del servidor
+  if (data.gameState) {
+    // Actualizar estado del juego antes de sincronizar
+    clientState.gameStatus = data.gameState.status || 'lobby';
+    syncGameState(data.gameState, data.role);
+  } else {
+    // Si no hay estado del juego, mostrar lobby por defecto
+    clientState.gameStatus = 'lobby';
+    showScreen('lobby');
+  }
+  
+  // Actualizar controles según si es host (después de actualizar gameStatus)
   updateHostControls();
   
   // Configurar el botón de compartir (ya está en el HTML)
@@ -216,7 +445,7 @@ function shareRoomLink() {
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(link)
       .then(() => {
-        alert(`¡Enlace copiado!\n\n${link}\n\nCompártelo con tus amigos para que se unan a la sala "${clientState.roomName}"`);
+        toast(`¡Enlace copiado!\n\n${link}\n\nCompártelo con tus amigos para que se unan a la sala "${clientState.roomName}"`, 'success', 6000);
       })
       .catch(() => {
         // Fallback si falla el clipboard
@@ -233,6 +462,13 @@ function shareRoomLink() {
 // =========================
 
 startGameButton.addEventListener('click', () => {
+  // Validar que el juego esté en lobby antes de intentar iniciar
+  if (clientState.gameStatus !== 'lobby') {
+    toast('El juego ya está en curso. Espera a que termine o reinicia la partida.', 'warning');
+    console.warn('Intento de iniciar juego cuando el estado es:', clientState.gameStatus);
+    return;
+  }
+  
   const selectedRounds = parseInt(roundsInput.value);
   socket.emit('start-game', { maxRounds: selectedRounds });
 });
@@ -245,6 +481,7 @@ changeNameButton.addEventListener('click', () => {
   clientState.playerId = null;
   clientState.playerName = null;
   clientState.hasVoted = false;
+  clientState.myRole = null;
   
   // Limpiar input
   nameInput.value = '';
@@ -260,6 +497,9 @@ changeNameButton.addEventListener('click', () => {
 socket.on('game-state-update', (state) => {
   console.log('Estado del juego actualizado:', state);
   
+  // Actualizar estado del juego en el cliente
+  clientState.gameStatus = state.status || 'lobby';
+  
   // Actualizar hostId
   clientState.hostId = state.hostId;
   clientState.isHost = (clientState.playerId === state.hostId);
@@ -267,7 +507,7 @@ socket.on('game-state-update', (state) => {
   // Actualizar lista de jugadores
   updatePlayersList(state.players);
   
-  // Actualizar controles de host
+  // Actualizar controles de host (debe ir después de actualizar gameStatus)
   updateHostControls();
   
   // Actualizar según el estado
@@ -333,14 +573,16 @@ function updatePlayersList(players) {
 // Nueva función para controlar visibilidad de botones de host
 function updateHostControls() {
   const isHost = clientState.isHost;
+  const gameStatus = clientState.gameStatus || 'lobby';
   
-  // Botón de iniciar juego
+  // Botón de iniciar juego - Solo visible si es host Y el juego está en lobby
   if (startGameButton) {
-    if (isHost) {
+    if (isHost && gameStatus === 'lobby') {
       startGameButton.style.display = 'block';
       startGameButton.disabled = false;
     } else {
       startGameButton.style.display = 'none';
+      startGameButton.disabled = true;
     }
   }
   
@@ -364,7 +606,17 @@ function updateHostControls() {
     }
   }
   
-  // Selector de rondas
+  // Selector de rondas - Solo visible si es host Y el juego está en lobby
+  const roundsSelector = document.querySelector('.rounds-selector');
+  if (roundsSelector) {
+    if (isHost && gameStatus === 'lobby') {
+      roundsSelector.style.display = 'block';
+    } else {
+      roundsSelector.style.display = 'none';
+    }
+  }
+  
+  // Selector de rondas (input)
   if (roundsInput) {
     roundsInput.disabled = !isHost;
   }
@@ -385,21 +637,8 @@ socket.on('game-started', (data) => {
 });
 
 socket.on('your-role', (data) => {
-  console.log('Tu rol:', data);
-  
-  roleDisplay.innerHTML = '';
-  
-  if (data.role === 'impostor') {
-    const impostorDiv = document.createElement('div');
-    impostorDiv.className = 'role-impostor';
-    impostorDiv.textContent = '🎭 ERES EL IMPOSTOR 🎭';
-    roleDisplay.appendChild(impostorDiv);
-  } else {
-    const wordDiv = document.createElement('div');
-    wordDiv.className = 'role-normal';
-    wordDiv.textContent = `📝 ${data.word}`;
-    roleDisplay.appendChild(wordDiv);
-  }
+  console.log('🎭 Rol recibido del servidor (evento separado):', data);
+  displayRole(data);
 });
 
 function updateGameScreen(state) {
@@ -540,6 +779,78 @@ function updateVoteStatus(players) {
 }
 
 // =========================
+// Animaciones de Resultados
+// =========================
+
+function createConfetti() {
+  confettiContainer.innerHTML = '';
+  confettiContainer.classList.add('active');
+  
+  const colors = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
+  const confettiCount = 150;
+  
+  for (let i = 0; i < confettiCount; i++) {
+    const confetti = document.createElement('div');
+    confetti.className = 'confetti';
+    
+    // Posición aleatoria horizontal
+    const left = Math.random() * 100;
+    confetti.style.left = `${left}%`;
+    
+    // Color aleatorio
+    confetti.style.background = colors[Math.floor(Math.random() * colors.length)];
+    
+    // Tamaño aleatorio
+    const size = Math.random() * 8 + 6;
+    confetti.style.width = `${size}px`;
+    confetti.style.height = `${size}px`;
+    
+    // Forma aleatoria (cuadrado o rectángulo)
+    if (Math.random() > 0.5) {
+      confetti.style.height = `${size * 0.5}px`;
+    }
+    
+    // Duración de caída aleatoria
+    const duration = Math.random() * 3 + 2;
+    confetti.style.animationDuration = `${duration}s`;
+    
+    // Delay aleatorio
+    const delay = Math.random() * 0.5;
+    confetti.style.animationDelay = `${delay}s`;
+    
+    // Dirección de deriva aleatoria
+    const drift = (Math.random() - 0.5) * 200;
+    confetti.style.setProperty('--drift', `${drift}px`);
+    
+    // Rotación aleatoria
+    const rotation = Math.random() * 720 - 360;
+    confetti.style.setProperty('--rotation', `${rotation}deg`);
+    
+    confettiContainer.appendChild(confetti);
+  }
+  
+  // Limpiar después de 5 segundos
+  setTimeout(() => {
+    confettiContainer.classList.remove('active');
+  }, 5000);
+}
+
+function activateDarknessEffect() {
+  darknessOverlay.classList.add('active');
+  
+  // Remover después de que termine la animación
+  setTimeout(() => {
+    darknessOverlay.classList.remove('active');
+  }, 10000);
+}
+
+function clearAnimations() {
+  confettiContainer.classList.remove('active');
+  confettiContainer.innerHTML = '';
+  darknessOverlay.classList.remove('active');
+}
+
+// =========================
 // Resultados
 // =========================
 
@@ -547,12 +858,55 @@ socket.on('game-results', (results) => {
   console.log('Resultados:', results);
   showScreen('results');
   
-  // Mensaje principal
-  resultsMessage.textContent = results.message;
-  if (results.impostorWon) {
+  // Limpiar animaciones previas
+  clearAnimations();
+  
+  // Determinar si YO gané o perdí (personalizado por jugador)
+  let iWon = false;
+  
+  if (clientState.myRole === 'impostor') {
+    // Si soy el impostor, gano si el impostor ganó
+    iWon = results.impostorWon;
+    console.log('🎭 Soy el impostor:', iWon ? 'GANÉ ✅' : 'PERDÍ ❌');
+  } else {
+    // Si NO soy el impostor, gano si atraparon al impostor
+    iWon = !results.impostorWon;
+    console.log('👥 Soy jugador normal:', iWon ? 'GANÉ ✅' : 'PERDÍ ❌');
+  }
+  
+  // Mensaje principal (personalizado según el jugador)
+  const isImpostor = clientState.myRole === 'impostor';
+  const isImpostorAndWon = isImpostor && results.impostorWon;
+  const isImpostorAndLost = isImpostor && !results.impostorWon;
+  
+  // Limpiar clases previas
+  resultsMessage.classList.remove('impostor-won', 'impostor-victory');
+  
+  if (isImpostorAndWon) {
+    // Si soy el impostor y gané, mensaje personalizado de victoria (VERDE)
+    resultsMessage.textContent = `🎉 ¡Has ganado! Eres el impostor y engañaste al grupo. 🎭`;
+    resultsMessage.classList.add('impostor-victory');
+  } else if (isImpostorAndLost) {
+    // Si soy el impostor y perdí, mensaje personalizado de derrota (ROJO)
+    resultsMessage.textContent = `😔 Has perdido. Te atraparon y descubrieron que eras el impostor.`;
+    resultsMessage.classList.add('impostor-won');
+  } else if (results.impostorWon) {
+    // Si NO soy el impostor y el impostor ganó, mensaje de derrota (ROJO)
+    resultsMessage.textContent = results.message;
     resultsMessage.classList.add('impostor-won');
   } else {
-    resultsMessage.classList.remove('impostor-won');
+    // Si NO soy el impostor y ganamos, mensaje de victoria (VERDE)
+    resultsMessage.textContent = results.message;
+    resultsMessage.classList.add('impostor-victory');
+  }
+  
+  // Animación personalizada según MI resultado
+  if (iWon) {
+    // YO GANÉ - Confeti
+    setTimeout(() => createConfetti(), 300);
+  } else {
+    // YO PERDÍ - Oscuridad
+    setTimeout(() => activateDarknessEffect(), 300);
   }
   
   // Revelar impostor
@@ -586,19 +940,23 @@ newGameButton.addEventListener('click', () => {
 socket.on('game-reset', (data) => {
   console.log('Juego reiniciado:', data.message);
   clientState.hasVoted = false;
+  clientState.myRole = null; // Limpiar rol al reiniciar
+  clientState.gameStatus = 'lobby'; // Resetear estado del juego
   if (clientState.playerId) {
     showScreen('lobby');
+    updateHostControls(); // Actualizar controles después del reset
   }
 });
 
 socket.on('kicked', (data) => {
-  alert(data.message);
+  toast(data.message, 'error', 5000);
   // Limpiar estado y volver al login
   clientState.playerId = null;
   clientState.playerName = null;
   clientState.hasVoted = false;
   clientState.isHost = false;
   clientState.hostId = null;
+  clientState.myRole = null;
   nameInput.value = '';
   showScreen('login');
 });
@@ -606,7 +964,7 @@ socket.on('kicked', (data) => {
 // Evento cuando te conviertes en host
 socket.on('you-are-host', (data) => {
   clientState.isHost = true;
-  alert(data.message);
+  toast(data.message, 'success');
   updateHostControls();
   
   // Actualizar el header
@@ -633,7 +991,7 @@ socket.on('host-changed', (data) => {
 // =========================
 
 socket.on('error', (data) => {
-  alert(data.message);
+  toast(data.message, 'error');
   console.error('Error del servidor:', data.message);
 });
 

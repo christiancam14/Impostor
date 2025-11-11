@@ -166,6 +166,12 @@
 
     <!-- Pantalla de Resultados -->
     <div id="results-screen" class="screen">
+      <!-- Animación de confeti (victoria) -->
+      <div id="confetti-container" class="confetti-container"></div>
+      
+      <!-- Animación de oscuridad (derrota) -->
+      <div id="darkness-overlay" class="darkness-overlay"></div>
+
       <header>
         <h1>📊 RESULTADOS</h1>
       </header>
@@ -201,6 +207,9 @@
       </main>
     </div>
   </div>
+
+  <!-- Contenedor de Toasts -->
+  <div id="toast-container" class="toast-container"></div>
 
   <!-- Socket.IO Client Library -->
   <script src="/socket.io/socket.io.js"></script>

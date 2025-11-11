@@ -190,12 +190,81 @@
       return name.toLowerCase().trim().replace(/[^a-z0-9-_]/g, '');
     }
 
+    // Función toast (misma que en client.js)
+    function toast(message, type = 'info', duration = 4000) {
+      let container = document.getElementById('toast-container');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.className = 'toast-container';
+        document.body.appendChild(container);
+      }
+
+      const toastEl = document.createElement('div');
+      toastEl.className = `toast ${type} progress`;
+      
+      const icons = {
+        success: '✅',
+        error: '❌',
+        warning: '⚠️',
+        info: 'ℹ️'
+      };
+      
+      const icon = icons[type] || icons.info;
+      
+      toastEl.innerHTML = `
+        <span class="toast-icon">${icon}</span>
+        <span class="toast-content">${message}</span>
+        <button class="toast-close" aria-label="Cerrar">×</button>
+        <div class="toast-progress-bar" style="animation-duration: ${duration}ms;"></div>
+      `;
+      
+      container.appendChild(toastEl);
+      
+      const closeToast = () => {
+        toastEl.classList.add('slide-out');
+        setTimeout(() => {
+          if (toastEl.parentNode) {
+            toastEl.parentNode.removeChild(toastEl);
+          }
+        }, 300);
+      };
+      
+      const closeBtn = toastEl.querySelector('.toast-close');
+      closeBtn.addEventListener('click', closeToast);
+      
+      const timeout = setTimeout(closeToast, duration);
+      const startTime = Date.now();
+      
+      toastEl.addEventListener('mouseenter', () => {
+        clearTimeout(timeout);
+        const progressBar = toastEl.querySelector('.toast-progress-bar');
+        if (progressBar) {
+          progressBar.style.animationPlayState = 'paused';
+        }
+      });
+      
+      toastEl.addEventListener('mouseleave', () => {
+        const remainingTime = duration - (Date.now() - startTime);
+        if (remainingTime > 0) {
+          setTimeout(closeToast, remainingTime);
+          const progressBar = toastEl.querySelector('.toast-progress-bar');
+          if (progressBar) {
+            progressBar.style.animationPlayState = 'running';
+          }
+        }
+      });
+      
+      return { dismiss: closeToast };
+    }
+
+    // Event listeners con toasts
     createRoomBtn.addEventListener('click', () => {
       const roomName = sanitizeRoomName(createRoomInput.value);
       if (roomName && roomName.length >= 3) {
         window.location.href = `/sala/${roomName}`;
       } else {
-        alert('Por favor ingresa un nombre válido (mínimo 3 caracteres, solo letras, números, - y _)');
+        toast('Por favor ingresa un nombre válido (mínimo 3 caracteres, solo letras, números, - y _)', 'warning');
       }
     });
 
@@ -204,7 +273,7 @@
       if (roomName) {
         window.location.href = `/sala/${roomName}`;
       } else {
-        alert('Por favor ingresa un código válido');
+        toast('Por favor ingresa un código válido', 'warning');
       }
     });
 
@@ -217,6 +286,9 @@
       if (e.key === 'Enter') joinRoomBtn.click();
     });
   </script>
+  
+  <!-- Contenedor de Toasts -->
+  <div id="toast-container" class="toast-container"></div>
 </body>
 </html>
 

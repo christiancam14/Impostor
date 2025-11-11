@@ -670,10 +670,157 @@ button:disabled {
   border-radius: 16px;
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   color: white;
+  animation: bounceIn 0.8s ease-out;
+  position: relative;
+  z-index: 10;
 }
 
 .results-message.impostor-won {
   background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  animation: shakeAndPulse 1s ease-out;
+}
+
+.results-message.impostor-victory {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  animation: bounceIn 0.8s ease-out;
+}
+
+/* Animación de entrada para victoria */
+@keyframes bounceIn {
+  0% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  70% {
+    transform: scale(0.9);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Animación de entrada para derrota */
+@keyframes shakeAndPulse {
+  0% {
+    transform: scale(0.3) rotate(0deg);
+    opacity: 0;
+  }
+  20% {
+    transform: scale(1.1) rotate(-5deg);
+  }
+  40% {
+    transform: scale(1.1) rotate(5deg);
+  }
+  60% {
+    transform: scale(1.1) rotate(-5deg);
+  }
+  80% {
+    transform: scale(1.1) rotate(5deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+/* Contenedor de confeti (Victoria) */
+.confetti-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 999;
+  overflow: hidden;
+  display: none;
+}
+
+.confetti-container.active {
+  display: block;
+}
+
+.confetti {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: #f0f;
+  top: -10px;
+  opacity: 0;
+  animation: confetti-fall linear forwards;
+}
+
+@keyframes confetti-fall {
+  0% {
+    top: -10px;
+    opacity: 1;
+    transform: translateX(0) rotateZ(0deg);
+  }
+  100% {
+    top: 100%;
+    opacity: 0.8;
+    transform: translateX(var(--drift)) rotateZ(var(--rotation));
+  }
+}
+
+/* Overlay de oscuridad (Derrota - Impostor ganó) */
+.darkness-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.8) 100%);
+  pointer-events: none;
+  z-index: 5;
+  opacity: 0;
+  display: none;
+}
+
+.darkness-overlay.active {
+  display: block;
+  animation: darknessRise 2s ease-out forwards;
+}
+
+@keyframes darknessRise {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+}
+
+/* Efecto de pulso para impostor ganó */
+.darkness-overlay.active::before {
+  content: '👹';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 15rem;
+  opacity: 0.15;
+  animation: impostorPulse 3s ease-in-out infinite;
+}
+
+@keyframes impostorPulse {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.15;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.2);
+    opacity: 0.25;
+  }
 }
 
 .results-info {
@@ -1103,5 +1250,166 @@ button:disabled {
 
   .highlight {
     font-size: 1.2rem;
+  }
+}
+
+/* =========================
+   Toast Notifications (Sonner-style)
+   ========================= */
+
+.toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: none;
+  max-width: 400px;
+  width: 100%;
+}
+
+.toast {
+  background: white;
+  border-radius: 12px;
+  padding: 16px 20px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  pointer-events: auto;
+  animation: toastSlideIn 0.3s ease-out;
+  position: relative;
+  overflow: hidden;
+}
+
+.toast::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: currentColor;
+}
+
+.toast.success {
+  color: #10b981;
+}
+
+.toast.error {
+  color: #ef4444;
+}
+
+.toast.warning {
+  color: #f59e0b;
+}
+
+.toast.info {
+  color: #3b82f6;
+}
+
+.toast-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.toast-content {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: #1f2937;
+  line-height: 1.5;
+  word-wrap: break-word;
+}
+
+.toast-close {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.toast-close:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #6b7280;
+}
+
+.toast.progress {
+  position: relative;
+}
+
+.toast-progress-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: currentColor;
+  opacity: 0.3;
+  animation: toastProgress linear;
+}
+
+@keyframes toastSlideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes toastSlideOut {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+@keyframes toastProgress {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+.toast.slide-out {
+  animation: toastSlideOut 0.3s ease-in forwards;
+}
+
+/* Mobile Toast Styles */
+@media (max-width: 768px) {
+  .toast-container {
+    top: 10px;
+    right: 10px;
+    left: 10px;
+    max-width: none;
+  }
+
+  .toast {
+    padding: 14px 16px;
+    font-size: 13px;
+  }
+
+  .toast-icon {
+    font-size: 18px;
   }
 }

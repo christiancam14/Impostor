@@ -296,6 +296,7 @@ function getOrCreateRoom(roomName) {
     rooms.set(roomName, {
       name: roomName,
       players: new Map(),
+      disconnectedPlayers: new Map(), // Jugadores temporalmente desconectados {name: {player data, timeout}}
       hostId: null, // ID del host/anfitrión de la sala
       status: "lobby",
       secretWord: null,
@@ -385,13 +386,92 @@ io.on("connection", (socket) => {
     // Obtener o crear el estado de la sala
     const roomState = getOrCreateRoom(roomName);
 
-    // Agregar jugador a la sala
-    roomState.players.set(socket.id, {
-      id: socket.id,
-      name: name.trim(),
-      role: null,
-      vote: null,
-    });
+    // Verificar si existe un jugador temporalmente desconectado con el mismo nombre
+    const disconnectedData = roomState.disconnectedPlayers.get(name.trim());
+    
+    if (disconnectedData) {
+      // Reconexión de un jugador que se desconectó temporalmente
+      console.log(`${name} se está reconectando a la sala ${roomName} (rol preservado: ${disconnectedData.player.role})`);
+      
+      // Cancelar el timeout de eliminación
+      if (disconnectedData.timeout) {
+        clearTimeout(disconnectedData.timeout);
+      }
+      
+      // Verificar si este jugador era el impostor
+      const wasImpostor = disconnectedData.player.id === roomState.impostorId;
+      
+      // Restaurar el jugador con su rol y voto preservados
+      roomState.players.set(socket.id, {
+        id: socket.id,
+        name: name.trim(),
+        role: disconnectedData.player.role,
+        vote: disconnectedData.player.vote,
+      });
+      
+      // Si el jugador era el impostor, actualizar el impostorId
+      if (wasImpostor) {
+        roomState.impostorId = socket.id;
+        console.log(`${name} recuperó su rol de IMPOSTOR (ID actualizado)`);
+      }
+      
+      // Si el jugador era el host, actualizar el hostId
+      if (disconnectedData.wasHost) {
+        roomState.hostId = socket.id;
+        console.log(`${name} recuperó su posición como HOST`);
+      }
+      
+      // Eliminar de la lista de desconectados
+      roomState.disconnectedPlayers.delete(name.trim());
+    } else {
+      // Verificar si ya existe un jugador conectado con el mismo nombre
+      let existingPlayer = null;
+      let existingPlayerId = null;
+      
+      for (const [playerId, player] of roomState.players.entries()) {
+        if (player.name === name.trim()) {
+          existingPlayer = player;
+          existingPlayerId = playerId;
+          break;
+        }
+      }
+      
+      if (existingPlayer && existingPlayerId !== socket.id) {
+        // Jugador duplicado conectándose simultáneamente (reemplazar)
+        console.log(`${name} se está conectando nuevamente (reemplazando conexión anterior)`);
+        
+        const preservedRole = existingPlayer.role;
+        const preservedVote = existingPlayer.vote;
+        const wasHost = roomState.hostId === existingPlayerId;
+        const wasImpostor = roomState.impostorId === existingPlayerId;
+        
+        roomState.players.delete(existingPlayerId);
+        
+        roomState.players.set(socket.id, {
+          id: socket.id,
+          name: name.trim(),
+          role: preservedRole,
+          vote: preservedVote,
+        });
+        
+        if (wasHost) {
+          roomState.hostId = socket.id;
+        }
+        
+        if (wasImpostor) {
+          roomState.impostorId = socket.id;
+          console.log(`${name} recuperó su rol de IMPOSTOR (ID actualizado en conexión duplicada)`);
+        }
+      } else {
+        // Jugador completamente nuevo
+        roomState.players.set(socket.id, {
+          id: socket.id,
+          name: name.trim(),
+          role: null,
+          vote: null,
+        });
+      }
+    }
 
     // Asignar como host si es el primer jugador
     if (roomState.hostId === null) {
@@ -400,11 +480,40 @@ io.on("connection", (socket) => {
     }
 
     console.log(`${name} se unió a la sala: ${roomName}`);
+    
+    // Preparar datos del rol si el juego está en curso
+    let roleData = null;
+    if (roomState.status === "playing" || roomState.status === "voting" || roomState.status === "extra-round-vote") {
+      const player = roomState.players.get(socket.id);
+      if (player && player.role) {
+        console.log(`Enviando rol a ${player.name}: ${player.role} (reconexión durante partida)`);
+        roleData = {
+          role: player.role,
+          word: player.role === "impostor" ? null : roomState.secretWord,
+        };
+      } else if (player) {
+        console.log(`⚠️ ADVERTENCIA: ${player.name} no tiene rol asignado durante partida activa`);
+      }
+    }
+    
+    // Enviar estado de conexión exitosa con el estado actual del juego Y el rol
     socket.emit("join-success", { 
       id: socket.id, 
       name: name.trim(),
-      isHost: socket.id === roomState.hostId
+      isHost: socket.id === roomState.hostId,
+      roomName: roomName,
+      // Enviar rol si está disponible (INCLUIDO EN join-success para evitar problemas de timing)
+      role: roleData,
+      // Enviar estado actual del juego para sincronización
+      gameState: {
+        status: roomState.status,
+        currentRound: roomState.currentRound,
+        maxRounds: roomState.maxRounds,
+        currentTurn: getCurrentPlayer(roomState)?.id || null,
+        players: getPlayersArray(roomState)
+      }
     });
+    
     broadcastGameState(roomName);
   });
 
@@ -662,14 +771,33 @@ io.on("connection", (socket) => {
     if (player) {
       console.log(`${player.name} se desconectó de sala ${roomName}`);
       const wasHost = socket.id === roomState.hostId;
+      
+      // Si el juego está en curso, guardar temporalmente al jugador para reconexión
+      if (roomState.status !== "lobby" && player.role) {
+        console.log(`💾 Guardando estado de ${player.name} para posible reconexión (rol: ${player.role})`);
+        
+        // Guardar jugador temporalmente (30 segundos para reconectar)
+        const timeout = setTimeout(() => {
+          console.log(`⏰ Tiempo de reconexión agotado para ${player.name}`);
+          roomState.disconnectedPlayers.delete(player.name);
+        }, 30000); // 30 segundos para reconectar
+        
+        roomState.disconnectedPlayers.set(player.name, {
+          player: { ...player }, // Copia del jugador con su rol
+          wasHost: wasHost,
+          timeout: timeout
+        });
+      }
+      
+      // Eliminar de jugadores activos
       roomState.players.delete(socket.id);
 
-      // Si el host se desconecta, asignar nuevo host
+      // Si el host se desconecta, asignar nuevo host temporalmente
       if (wasHost && roomState.players.size > 0) {
         const newHostId = Array.from(roomState.players.keys())[0];
         roomState.hostId = newHostId;
         const newHost = roomState.players.get(newHostId);
-        console.log(`${newHost.name} es el nuevo HOST de la sala ${roomName}`);
+        console.log(`${newHost.name} es el nuevo HOST temporal de la sala ${roomName}`);
         
         // Notificar al nuevo host
         const newHostSocket = io.sockets.sockets.get(newHostId);
@@ -698,7 +826,7 @@ io.on("connection", (socket) => {
       // Si la sala está vacía, eliminarla después de un tiempo
       if (roomState.players.size === 0) {
         setTimeout(() => {
-          if (roomState.players.size === 0) {
+          if (roomState.players.size === 0 && roomState.disconnectedPlayers.size === 0) {
             rooms.delete(roomName);
             console.log(`Sala ${roomName} eliminada (vacía)`);
           }
@@ -771,25 +899,42 @@ function calculateResults(roomName) {
     }
   });
 
-  const impostor = roomState.players.get(roomState.impostorId);
+  // Buscar al impostor
+  let impostor = roomState.players.get(roomState.impostorId);
+  
+  // Si el impostor no se encuentra (reconexión fallida), buscarlo por rol
+  if (!impostor) {
+    console.log('⚠️ ADVERTENCIA: impostorId no encontrado, buscando por rol...');
+    for (const [playerId, player] of roomState.players.entries()) {
+      if (player.role === 'impostor') {
+        impostor = player;
+        roomState.impostorId = playerId; // Actualizar el ID
+        console.log(`Impostor encontrado: ${player.name} (ID: ${playerId})`);
+        break;
+      }
+    }
+  }
+  
   const mostVoted = roomState.players.get(mostVotedId);
   const impostorWon = mostVotedId !== roomState.impostorId;
+  
+  const impostorName = impostor?.name || 'Desconocido';
 
   const results = {
     impostorId: roomState.impostorId,
-    impostorName: impostor?.name,
+    impostorName: impostorName,
     secretWord: roomState.secretWord,
     mostVotedId: mostVotedId,
-    mostVotedName: mostVoted?.name,
+    mostVotedName: mostVoted?.name || 'Nadie',
     votes: Array.from(voteCount.entries()).map(([playerId, count]) => ({
       playerId,
-      playerName: roomState.players.get(playerId)?.name,
+      playerName: roomState.players.get(playerId)?.name || 'Desconocido',
       count,
     })),
     impostorWon,
     message: impostorWon
-      ? `¡El impostor (${impostor?.name}) ganó! Engañaron al grupo.`
-      : `¡Atraparon al impostor (${impostor?.name})! Los jugadores ganaron.`,
+      ? `¡El impostor (${impostorName}) ganó! Engañaron al grupo.`
+      : `¡Atraparon al impostor (${impostorName})! Los jugadores ganaron.`,
   };
 
   io.to(roomName).emit("game-results", results);
