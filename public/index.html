@@ -33,13 +33,20 @@
     <!-- Pantalla de Lobby -->
     <div id="lobby-screen" class="screen">
       <header>
-        <div style="width: 100%;">
+        <div class="header-top">
           <h1>🕵️ IMPOSTOR - Lobby</h1>
           <p id="room-name-display" style="font-size: 0.9rem; opacity: 0.9; margin-top: 5px;"></p>
         </div>
-        <div class="player-info">
-          <span id="player-name-display"></span>
-          <button id="change-name-button" class="btn-change-name">Cambiar Nombre</button>
+        <div class="header-controls">
+          <div class="player-info">
+            <span id="player-name-display"></span>
+          </div>
+          <div class="action-buttons">
+            <button id="share-room-button" class="btn-share-room" title="Compartir sala">
+              🔗 Compartir
+            </button>
+            <button id="change-name-button" class="btn-change-name">Cambiar Nombre</button>
+          </div>
         </div>
       </header>
 

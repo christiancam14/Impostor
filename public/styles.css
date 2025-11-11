@@ -133,7 +133,39 @@ header h1 {
   font-weight: 700;
 }
 
-.player-info, .game-info {
+/* Header Structure */
+.header-top {
+  width: 100%;
+}
+
+.header-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  flex-wrap: wrap;
+  width: 100%;
+  margin-top: 10px;
+}
+
+.player-info {
+  font-size: 1rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0; /* Permite que el texto se trunce si es necesario */
+}
+
+.action-buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.game-info {
   font-size: 1rem;
   font-weight: 600;
   display: flex;
@@ -769,16 +801,36 @@ button:disabled {
     text-align: center;
   }
 
-  .player-info, .game-info {
+  .header-controls {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .player-info {
+    width: 100%;
+    justify-content: center;
+    font-size: 0.9rem;
+  }
+
+  .action-buttons {
+    width: 100%;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .btn-change-name, .btn-share-room {
+    padding: 8px 14px;
+    font-size: 0.85rem;
+    flex: 1;
+    min-width: 120px;
+  }
+
+  .game-info {
     width: 100%;
     justify-content: center;
     font-size: 0.9rem;
     flex-wrap: wrap;
-  }
-
-  .btn-change-name, .btn-share-room {
-    padding: 6px 12px;
-    font-size: 0.8rem;
   }
 
   /* Main Content Mobile */
@@ -1005,6 +1057,16 @@ button:disabled {
 
   main {
     padding: 10px;
+  }
+
+  .action-buttons {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .btn-change-name, .btn-share-room {
+    width: 100%;
+    min-width: unset;
   }
 
   .players-section, .info-section,

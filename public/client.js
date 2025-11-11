@@ -30,6 +30,38 @@ const clientState = {
   hostId: null
 };
 
+// =========================
+// localStorage - Persistencia del nombre
+// =========================
+
+// Guardar nombre en localStorage
+function savePlayerName(name) {
+  try {
+    localStorage.setItem(`impostor_player_name_${clientState.roomName}`, name);
+  } catch (e) {
+    console.error('Error al guardar nombre:', e);
+  }
+}
+
+// Obtener nombre guardado de localStorage
+function getSavedPlayerName() {
+  try {
+    return localStorage.getItem(`impostor_player_name_${clientState.roomName}`);
+  } catch (e) {
+    console.error('Error al leer nombre guardado:', e);
+    return null;
+  }
+}
+
+// Limpiar nombre guardado
+function clearSavedPlayerName() {
+  try {
+    localStorage.removeItem(`impostor_player_name_${clientState.roomName}`);
+  } catch (e) {
+    console.error('Error al limpiar nombre:', e);
+  }
+}
+
 // Elementos del DOM
 const screens = {
   login: document.getElementById('login-screen'),
@@ -99,6 +131,19 @@ socket.on('connect', () => {
   connectionIndicator.classList.remove('disconnected');
   connectionIndicator.classList.add('connected');
   connectionText.textContent = 'Conectado';
+  
+  // Auto-login si hay nombre guardado y estamos en la pantalla de login
+  if (clientState.currentScreen === 'login') {
+    const savedName = getSavedPlayerName();
+    if (savedName) {
+      console.log('Nombre guardado encontrado:', savedName);
+      nameInput.value = savedName;
+      // Auto-conectar después de un pequeño delay
+      setTimeout(() => {
+        joinGame();
+      }, 500);
+    }
+  }
 });
 
 socket.on('disconnect', () => {
@@ -124,6 +169,9 @@ function joinGame() {
     return;
   }
   
+  // Guardar nombre en localStorage
+  savePlayerName(name);
+  
   // Enviar nombre de jugador Y nombre de sala
   socket.emit('join-game', { 
     name: name,
@@ -138,12 +186,7 @@ socket.on('join-success', (data) => {
   
   const hostBadge = data.isHost ? '<span class="host-badge-header">👑 Host</span>' : '';
   
-  playerNameDisplay.innerHTML = `
-    <span>👤 ${data.name} ${hostBadge}</span>
-    <button id="share-room-btn" class="btn-share-room" title="Compartir sala">
-      🔗 Compartir
-    </button>
-  `;
+  playerNameDisplay.innerHTML = `👤 ${data.name} ${hostBadge}`;
   
   // Mostrar nombre de la sala
   if (roomNameDisplay) {
@@ -158,13 +201,12 @@ socket.on('join-success', (data) => {
   // Actualizar controles según si es host
   updateHostControls();
   
-  // Agregar evento al botón de compartir después de crearlo
-  setTimeout(() => {
-    const shareBtn = document.getElementById('share-room-btn');
-    if (shareBtn) {
-      shareBtn.addEventListener('click', shareRoomLink);
-    }
-  }, 100);
+  // Configurar el botón de compartir (ya está en el HTML)
+  const shareBtn = document.getElementById('share-room-button');
+  if (shareBtn && !shareBtn.hasAttribute('data-listener')) {
+    shareBtn.addEventListener('click', shareRoomLink);
+    shareBtn.setAttribute('data-listener', 'true');
+  }
 });
 
 function shareRoomLink() {
@@ -196,6 +238,9 @@ startGameButton.addEventListener('click', () => {
 });
 
 changeNameButton.addEventListener('click', () => {
+  // Limpiar nombre guardado en localStorage
+  clearSavedPlayerName();
+  
   // Limpiar estado del cliente
   clientState.playerId = null;
   clientState.playerName = null;

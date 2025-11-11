@@ -807,7 +807,31 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 
 // Iniciar servidor
-server.listen(PORT, () => {
-  console.log(`Servidor del juego Impostor corriendo en http://localhost:${PORT}`);
-  console.log(`Sistema de salas activado`);
+// Función para obtener la IP local de la máquina
+function getLocalIP() {
+  const { networkInterfaces } = require("os");
+  const nets = networkInterfaces();
+  
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]) {
+      // Buscar IPv4 que no sea interna (localhost)
+      if (net.family === "IPv4" && !net.internal) {
+        return net.address;
+      }
+    }
+  }
+  return "No se pudo obtener la IP local";
+}
+
+server.listen(PORT, "0.0.0.0", () => {
+  const localIP = getLocalIP();
+  console.log(`\n🎮 Servidor del juego Impostor iniciado`);
+  console.log(`Sistema de salas activado\n`);
+  console.log(`📍 Accesos disponibles:`);
+  console.log(`   Local:        http://localhost:${PORT}`);
+  console.log(`   Red Local:    http://${localIP}:${PORT}`);
+  console.log(`\n💡 Para acceder desde otros dispositivos en tu red:`);
+  console.log(`   1. Asegúrate de que estén en la misma red Wi-Fi`);
+  console.log(`   2. Usa la dirección: http://${localIP}:${PORT}`);
+  console.log(`   3. Si no funciona, verifica el firewall de Windows\n`);
 });
