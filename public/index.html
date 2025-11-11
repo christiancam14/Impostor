@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Impostor - Juego de Palabras</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
   <div class="container">
@@ -33,7 +33,10 @@
     <!-- Pantalla de Lobby -->
     <div id="lobby-screen" class="screen">
       <header>
-        <h1>🕵️ IMPOSTOR - Lobby</h1>
+        <div style="width: 100%;">
+          <h1>🕵️ IMPOSTOR - Lobby</h1>
+          <p id="room-name-display" style="font-size: 0.9rem; opacity: 0.9; margin-top: 5px;"></p>
+        </div>
         <div class="player-info">
           <span id="player-name-display"></span>
           <button id="change-name-button" class="btn-change-name">Cambiar Nombre</button>
@@ -53,7 +56,7 @@
               <p>1️⃣ Se necesitan mínimo 3 jugadores</p>
               <p>2️⃣ Todos menos uno recibirán una palabra secreta</p>
               <p>3️⃣ Uno será el <strong>IMPOSTOR</strong></p>
-              <p>4️⃣ Cada jugador dará sinónimos de su palabra</p>
+              <p>4️⃣ Cada jugadora debe decir, en su turno, una palabra relacionada con la palabra clave.</p>
               <p>5️⃣ Después de las rondas, voten por el impostor</p>
             </div>
             
@@ -126,11 +129,11 @@
           <p class="extra-round-description">Si no tienen claro quién es el impostor, pueden jugar una ronda adicional</p>
           
           <div class="extra-round-buttons">
-            <button id="vote-yes-extra" class="btn-extra-round btn-yes">
-              ✅ SÍ, una ronda más
+            <button id="vote-yes-extra" class="btn-extra-round btn-no">
+              Una ronda más
             </button>
-            <button id="vote-no-extra" class="btn-extra-round btn-no">
-              ❌ NO, votar ahora
+            <button id="vote-no-extra" class="btn-extra-round btn-yes">
+              Votar ahora
             </button>
           </div>
 
@@ -194,6 +197,6 @@
 
   <!-- Socket.IO Client Library -->
   <script src="/socket.io/socket.io.js"></script>
-  <script src="client.js"></script>
+  <script src="/client.js"></script>
 </body>
 </html>

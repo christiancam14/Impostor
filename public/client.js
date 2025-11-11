@@ -1,3 +1,21 @@
+// Detectar nombre de sala desde la URL
+const urlPath = window.location.pathname;
+const roomMatch = urlPath.match(/\/sala\/([^\/]+)/);
+const roomName = roomMatch ? roomMatch[1] : null;
+
+// Si no estamos en una sala válida, detener la ejecución
+if (!roomName) {
+  console.error('No se detectó una sala válida. Por favor accede desde la página de inicio.');
+  document.body.innerHTML = `
+    <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; flex-direction: column; font-family: sans-serif; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #7e22ce 100%); color: white;">
+      <h1 style="font-size: 3rem; margin-bottom: 20px;">🕵️ IMPOSTOR</h1>
+      <p style="font-size: 1.2rem; margin-bottom: 30px;">No se detectó una sala válida</p>
+      <a href="/" style="padding: 15px 30px; background: white; color: #667eea; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 1.1rem;">Ir al Inicio</a>
+    </div>
+  `;
+  throw new Error('No hay sala válida'); // Detener completamente la ejecución del script
+}
+
 // Conectar al servidor Socket.IO
 const socket = io();
 
@@ -5,8 +23,11 @@ const socket = io();
 const clientState = {
   playerId: null,
   playerName: null,
+  roomName: roomName,
   currentScreen: 'login',
-  hasVoted: false
+  hasVoted: false,
+  isHost: false,
+  hostId: null
 };
 
 // Elementos del DOM
@@ -27,6 +48,7 @@ const connectionText = document.getElementById('connection-text');
 
 // Elementos del lobby
 const playerNameDisplay = document.getElementById('player-name-display');
+const roomNameDisplay = document.getElementById('room-name-display');
 const playerCount = document.getElementById('player-count');
 const playersList = document.getElementById('players-list');
 const startGameButton = document.getElementById('start-game-button');
@@ -102,15 +124,67 @@ function joinGame() {
     return;
   }
   
-  socket.emit('join-game', { name });
+  // Enviar nombre de jugador Y nombre de sala
+  socket.emit('join-game', { 
+    name: name,
+    roomName: clientState.roomName 
+  });
 }
 
 socket.on('join-success', (data) => {
   clientState.playerId = data.id;
   clientState.playerName = data.name;
-  playerNameDisplay.textContent = `👤 ${data.name}`;
+  clientState.isHost = data.isHost || false;
+  
+  const hostBadge = data.isHost ? '<span class="host-badge-header">👑 Host</span>' : '';
+  
+  playerNameDisplay.innerHTML = `
+    <span>👤 ${data.name} ${hostBadge}</span>
+    <button id="share-room-btn" class="btn-share-room" title="Compartir sala">
+      🔗 Compartir
+    </button>
+  `;
+  
+  // Mostrar nombre de la sala
+  if (roomNameDisplay) {
+    roomNameDisplay.textContent = `🚪 Sala: ${clientState.roomName}`;
+  }
+  
+  // Actualizar título de la página
+  document.title = `Impostor - Sala: ${clientState.roomName}`;
+  
   showScreen('lobby');
+  
+  // Actualizar controles según si es host
+  updateHostControls();
+  
+  // Agregar evento al botón de compartir después de crearlo
+  setTimeout(() => {
+    const shareBtn = document.getElementById('share-room-btn');
+    if (shareBtn) {
+      shareBtn.addEventListener('click', shareRoomLink);
+    }
+  }, 100);
 });
+
+function shareRoomLink() {
+  const link = `${window.location.origin}/sala/${clientState.roomName}`;
+  
+  // Intentar copiar al portapapeles
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(link)
+      .then(() => {
+        alert(`¡Enlace copiado!\n\n${link}\n\nCompártelo con tus amigos para que se unan a la sala "${clientState.roomName}"`);
+      })
+      .catch(() => {
+        // Fallback si falla el clipboard
+        prompt('Copia este enlace para compartir:', link);
+      });
+  } else {
+    // Fallback para navegadores que no soportan clipboard
+    prompt('Copia este enlace para compartir:', link);
+  }
+}
 
 // =========================
 // Lobby
@@ -141,8 +215,15 @@ changeNameButton.addEventListener('click', () => {
 socket.on('game-state-update', (state) => {
   console.log('Estado del juego actualizado:', state);
   
+  // Actualizar hostId
+  clientState.hostId = state.hostId;
+  clientState.isHost = (clientState.playerId === state.hostId);
+  
   // Actualizar lista de jugadores
   updatePlayersList(state.players);
+  
+  // Actualizar controles de host
+  updateHostControls();
   
   // Actualizar según el estado
   if (state.status === 'lobby') {
@@ -180,21 +261,68 @@ function updatePlayersList(players) {
     const playerItem = document.createElement('div');
     playerItem.className = 'player-item';
     
-    if (player.id === clientState.playerId) {
+    const isHost = player.id === clientState.hostId;
+    const isYou = player.id === clientState.playerId;
+    const icon = isHost ? '👑' : '👤';
+    const hostBadge = isHost ? '<span class="host-badge">Host</span>' : '';
+    
+    if (isYou) {
       playerItem.classList.add('you');
       playerItem.innerHTML = `
-        <span class="player-name">👤 ${player.name} <strong>(Tú)</strong></span>
+        <span class="player-name">${icon} ${player.name} <strong>(Tú)</strong> ${hostBadge}</span>
       `;
     } else {
       playerItem.innerHTML = `
-        <span class="player-name">👤 ${player.name}</span>
-        <button class="btn-kick" onclick="kickPlayer('${player.id}', '${player.name}')">
-          ❌ Expulsar
-        </button>
+        <span class="player-name">${icon} ${player.name} ${hostBadge}</span>
+        ${clientState.isHost ? `
+          <button class="btn-kick" onclick="kickPlayer('${player.id}', '${player.name}')">
+            ❌ Expulsar
+          </button>
+        ` : ''}
       `;
     }
     playersList.appendChild(playerItem);
   });
+}
+
+// Nueva función para controlar visibilidad de botones de host
+function updateHostControls() {
+  const isHost = clientState.isHost;
+  
+  // Botón de iniciar juego
+  if (startGameButton) {
+    if (isHost) {
+      startGameButton.style.display = 'block';
+      startGameButton.disabled = false;
+    } else {
+      startGameButton.style.display = 'none';
+    }
+  }
+  
+  // Botón de siguiente turno
+  if (nextTurnButton) {
+    if (isHost) {
+      nextTurnButton.style.display = 'block';
+      nextTurnButton.disabled = false;
+    } else {
+      nextTurnButton.style.display = 'none';
+    }
+  }
+  
+  // Botón de reiniciar
+  if (newGameButton) {
+    if (isHost) {
+      newGameButton.style.display = 'block';
+      newGameButton.disabled = false;
+    } else {
+      newGameButton.style.display = 'none';
+    }
+  }
+  
+  // Selector de rondas
+  if (roundsInput) {
+    roundsInput.disabled = !isHost;
+  }
 }
 
 function kickPlayer(playerId, playerName) {
@@ -424,8 +552,35 @@ socket.on('kicked', (data) => {
   clientState.playerId = null;
   clientState.playerName = null;
   clientState.hasVoted = false;
+  clientState.isHost = false;
+  clientState.hostId = null;
   nameInput.value = '';
   showScreen('login');
+});
+
+// Evento cuando te conviertes en host
+socket.on('you-are-host', (data) => {
+  clientState.isHost = true;
+  alert(data.message);
+  updateHostControls();
+  
+  // Actualizar el header
+  const hostBadge = '<span class="host-badge-header">👑 Host</span>';
+  const shareBtn = document.getElementById('share-room-btn');
+  if (shareBtn) {
+    playerNameDisplay.innerHTML = `
+      <span>👤 ${clientState.playerName} ${hostBadge}</span>
+    `;
+    playerNameDisplay.appendChild(shareBtn);
+  }
+});
+
+// Evento cuando cambia el host
+socket.on('host-changed', (data) => {
+  console.log(`Nuevo host: ${data.newHostName}`);
+  clientState.hostId = data.newHostId;
+  clientState.isHost = (clientState.playerId === data.newHostId);
+  updateHostControls();
 });
 
 // =========================

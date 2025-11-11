@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Impostor - Inicio</title>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    .home-screen {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    
+    .home-box {
+      background: white;
+      padding: 60px 40px;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 600px;
+      width: 100%;
+      text-align: center;
+    }
+    
+    .home-title {
+      font-size: 3.5rem;
+      margin-bottom: 10px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .home-subtitle {
+      font-size: 1.2rem;
+      color: #6b7280;
+      margin-bottom: 40px;
+    }
+    
+    .room-options {
+      display: flex;
+      flex-direction: column;
+      gap: 30px;
+      margin-top: 30px;
+    }
+    
+    .room-section {
+      background: #f9fafb;
+      padding: 30px;
+      border-radius: 16px;
+      border: 2px solid #e5e7eb;
+    }
+    
+    .room-section h3 {
+      font-size: 1.3rem;
+      color: #667eea;
+      margin-bottom: 20px;
+    }
+    
+    .room-input {
+      width: 100%;
+      padding: 16px 20px;
+      border: 2px solid #e5e7eb;
+      border-radius: 12px;
+      font-size: 1.1rem;
+      margin-bottom: 15px;
+      transition: border-color 0.3s ease;
+    }
+    
+    .room-input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    
+    .room-btn {
+      width: 100%;
+      padding: 18px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 1.2rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    .room-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+    }
+    
+    .room-btn:active {
+      transform: translateY(0);
+    }
+    
+    .divider {
+      text-align: center;
+      color: #6b7280;
+      font-size: 1rem;
+      margin: 20px 0;
+    }
+    
+    .info-text {
+      font-size: 0.9rem;
+      color: #6b7280;
+      margin-top: 10px;
+      line-height: 1.5;
+    }
+
+    @media (max-width: 768px) {
+      .home-box {
+        padding: 40px 20px;
+      }
+      
+      .home-title {
+        font-size: 2.5rem;
+      }
+      
+      .home-subtitle {
+        font-size: 1rem;
+      }
+      
+      .room-section {
+        padding: 20px;
+      }
+      
+      .room-section h3 {
+        font-size: 1.1rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="home-screen">
+    <div class="home-box">
+      <h1 class="home-title">🕵️ IMPOSTOR</h1>
+      <p class="home-subtitle">Juego de palabras y deducciones</p>
+      
+      <div class="room-options">
+        <!-- Crear Sala -->
+        <div class="room-section">
+          <h3>🎮 Crear Nueva Sala</h3>
+          <input 
+            type="text" 
+            id="create-room-input" 
+            class="room-input"
+            placeholder="Nombre de la sala (ej: chris)"
+            maxlength="20"
+            autocomplete="off"
+          >
+          <button id="create-room-btn" class="room-btn">Crear Sala</button>
+          <p class="info-text">
+            Crea una sala con un nombre único. Podrás compartir el enlace con tus amigos.
+          </p>
+        </div>
+        
+        <div class="divider">— o —</div>
+        
+        <!-- Unirse a Sala -->
+        <div class="room-section">
+          <h3>🚪 Unirse a Sala Existente</h3>
+          <input 
+            type="text" 
+            id="join-room-input" 
+            class="room-input"
+            placeholder="Código de la sala"
+            maxlength="20"
+            autocomplete="off"
+          >
+          <button id="join-room-btn" class="room-btn">Unirse a Sala</button>
+          <p class="info-text">
+            Ingresa el código de la sala que te compartieron tus amigos.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const createRoomInput = document.getElementById('create-room-input');
+    const createRoomBtn = document.getElementById('create-room-btn');
+    const joinRoomInput = document.getElementById('join-room-input');
+    const joinRoomBtn = document.getElementById('join-room-btn');
+
+    function sanitizeRoomName(name) {
+      // Solo permitir letras, números, guiones y guiones bajos
+      return name.toLowerCase().trim().replace(/[^a-z0-9-_]/g, '');
+    }
+
+    createRoomBtn.addEventListener('click', () => {
+      const roomName = sanitizeRoomName(createRoomInput.value);
+      if (roomName && roomName.length >= 3) {
+        window.location.href = `/sala/${roomName}`;
+      } else {
+        alert('Por favor ingresa un nombre válido (mínimo 3 caracteres, solo letras, números, - y _)');
+      }
+    });
+
+    joinRoomBtn.addEventListener('click', () => {
+      const roomName = sanitizeRoomName(joinRoomInput.value);
+      if (roomName) {
+        window.location.href = `/sala/${roomName}`;
+      } else {
+        alert('Por favor ingresa un código válido');
+      }
+    });
+
+    // Soporte para tecla Enter
+    createRoomInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') createRoomBtn.click();
+    });
+    
+    joinRoomInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') joinRoomBtn.click();
+    });
+  </script>
+</body>
+</html>
+

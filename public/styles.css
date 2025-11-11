@@ -139,21 +139,43 @@ header h1 {
   display: flex;
   align-items: center;
   gap: 15px;
+  flex-wrap: wrap;
 }
 
-.btn-change-name {
+.btn-change-name, .btn-share-room {
   padding: 8px 16px;
   font-size: 0.9rem;
   background: rgba(255, 255, 255, 0.2);
   border: 2px solid rgba(255, 255, 255, 0.5);
   color: white;
   transition: all 0.3s ease;
+  white-space: nowrap;
 }
 
-.btn-change-name:hover {
+.btn-change-name:hover, .btn-share-room:hover {
   background: rgba(255, 255, 255, 0.3);
   border-color: white;
   transform: translateY(-2px);
+}
+
+.btn-share-room {
+  background: rgba(16, 185, 129, 0.3);
+  border-color: rgba(16, 185, 129, 0.7);
+}
+
+.btn-share-room:hover {
+  background: rgba(16, 185, 129, 0.5);
+  border-color: #10b981;
+}
+
+.host-badge-header {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin-left: 8px;
 }
 
 /* Main Content */
@@ -298,6 +320,17 @@ button:disabled {
 .player-item.you {
   border-left-color: #10b981;
   background: #f0fdf4;
+}
+
+.host-badge {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  margin-left: 8px;
+  display: inline-block;
 }
 
 .instructions {
@@ -743,7 +776,7 @@ button:disabled {
     flex-wrap: wrap;
   }
 
-  .btn-change-name {
+  .btn-change-name, .btn-share-room {
     padding: 6px 12px;
     font-size: 0.8rem;
   }
