@@ -554,7 +554,20 @@ io.on("connection", (socket) => {
       }
     }
 
-    // Asignar como host si es el primer jugador
+    // Verificar y corregir hostId antes de asignar
+    // Si el hostId actual apunta a un socket que ya no existe, limpiarlo
+    if (roomState.hostId !== null) {
+      const currentHostSocket = io.sockets.sockets.get(roomState.hostId);
+      const currentHostPlayer = roomState.players.get(roomState.hostId);
+      
+      if (!currentHostSocket || !currentHostPlayer) {
+        // El host actual ya no existe, limpiar para asignar uno nuevo
+        roomState.hostId = null;
+        console.log(`Host anterior ya no existe en sala ${roomName}, se asignará uno nuevo`);
+      }
+    }
+
+    // Asignar como host si es el primer jugador o si el hostId actual es null
     if (roomState.hostId === null) {
       roomState.hostId = socket.id;
       console.log(`${name} es el HOST de la sala: ${roomName}`);
@@ -957,25 +970,32 @@ io.on("connection", (socket) => {
       // Eliminar de jugadores activos
       roomState.players.delete(socket.id);
 
-      // Si el host se desconecta, asignar nuevo host temporalmente
-      if (wasHost && roomState.players.size > 0) {
-        const newHostId = Array.from(roomState.players.keys())[0];
-        roomState.hostId = newHostId;
-        const newHost = roomState.players.get(newHostId);
-        console.log(`${newHost.name} es el nuevo HOST temporal de la sala ${roomName}`);
-        
-        // Notificar al nuevo host
-        const newHostSocket = io.sockets.sockets.get(newHostId);
-        if (newHostSocket) {
-          newHostSocket.emit('you-are-host', { 
-            message: '¡Ahora eres el host de la sala!' 
+      // Si el host se desconecta, asignar nuevo host temporalmente o limpiar hostId
+      if (wasHost) {
+        if (roomState.players.size > 0) {
+          // Hay otros jugadores, asignar nuevo host
+          const newHostId = Array.from(roomState.players.keys())[0];
+          roomState.hostId = newHostId;
+          const newHost = roomState.players.get(newHostId);
+          console.log(`${newHost.name} es el nuevo HOST temporal de la sala ${roomName}`);
+          
+          // Notificar al nuevo host
+          const newHostSocket = io.sockets.sockets.get(newHostId);
+          if (newHostSocket) {
+            newHostSocket.emit('you-are-host', { 
+              message: '¡Ahora eres el host de la sala!' 
+            });
+          }
+          
+          io.to(roomName).emit('host-changed', {
+            newHostId: newHostId,
+            newHostName: newHost.name
           });
+        } else {
+          // Es el único jugador, limpiar hostId para que se asigne cuando se reconecte
+          roomState.hostId = null;
+          console.log(`Host desconectado y es el único jugador en sala ${roomName}, hostId limpiado`);
         }
-        
-        io.to(roomName).emit('host-changed', {
-          newHostId: newHostId,
-          newHostName: newHost.name
-        });
       }
 
       // Si el juego está en curso y quedan muy pocos jugadores, reiniciar

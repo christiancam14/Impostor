@@ -343,7 +343,12 @@ function syncGameState(gameState, roleData) {
           votingPlayers.appendChild(button);
         });
         // Actualizar lista visual de jugadores
-        updatePlayersVotingList(gameState.players);
+        // Asegurar que todos los jugadores tengan vote = null al iniciar votación
+        const cleanPlayers = gameState.players.map(p => ({
+          ...p,
+          vote: null // Forzar limpieza de votos previos
+        }));
+        updatePlayersVotingList(cleanPlayers);
       }
       break;
       
@@ -601,11 +606,18 @@ socket.on('game-state-update', (state) => {
       clientState.hasVoted = false;
       createVotingButtons(state.players);
       // Mostrar lista inicial de jugadores (todos en gris hasta que voten)
+      // Asegurar que todos los jugadores tengan vote = null al iniciar votación
       if (state.players) {
-        updatePlayersVotingList(state.players);
+        const cleanPlayers = state.players.map(p => ({
+          ...p,
+          vote: null // Forzar limpieza de votos previos
+        }));
+        updatePlayersVotingList(cleanPlayers);
       }
+    } else {
+      // Si ya estamos en la pantalla de votación, actualizar con el estado real del servidor
+      updateVoteStatus(state.players);
     }
-    updateVoteStatus(state.players);
   } else if (state.status === 'results') {
     // Los resultados se manejan en el evento 'game-results'
   }
