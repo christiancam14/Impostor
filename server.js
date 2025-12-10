@@ -298,6 +298,7 @@ function getOrCreateRoom(roomName) {
       players: new Map(),
       disconnectedPlayers: new Map(), // Jugadores temporalmente desconectados {name: {player data, timeout}}
       hostId: null, // ID del host/anfitrión de la sala
+      playerOrder: [], // Orden de los jugadores para los turnos (se aleatoriza al iniciar)
       status: "lobby",
       secretWord: null,
       impostorId: null,
@@ -323,7 +324,23 @@ function selectRandomImpostor(roomState) {
 }
 
 function getPlayersArray(roomState) {
+  // Si hay un orden definido (durante el juego), usarlo
+  if (roomState.playerOrder && roomState.playerOrder.length > 0) {
+    return roomState.playerOrder
+      .map(playerId => roomState.players.get(playerId))
+      .filter(player => player !== undefined);
+  }
+  // Si no hay orden (lobby), usar el orden del Map
   return Array.from(roomState.players.values());
+}
+
+function shuffleArray(array) {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
 }
 
 function getCurrentPlayer(roomState) {
@@ -409,6 +426,15 @@ io.on("connection", (socket) => {
         vote: disconnectedData.player.vote,
       });
       
+      // Actualizar playerOrder si el juego está en curso (mantener posición)
+      if (roomState.status !== "lobby" && roomState.playerOrder.length > 0) {
+        const oldId = disconnectedData.player.id;
+        const index = roomState.playerOrder.indexOf(oldId);
+        if (index !== -1) {
+          roomState.playerOrder[index] = socket.id; // Reemplazar ID antiguo con nuevo
+        }
+      }
+      
       // Si el jugador era el impostor, actualizar el impostorId
       if (wasImpostor) {
         roomState.impostorId = socket.id;
@@ -454,6 +480,14 @@ io.on("connection", (socket) => {
           vote: preservedVote,
         });
         
+        // Actualizar playerOrder si el juego está en curso (mantener posición)
+        if (roomState.status !== "lobby" && roomState.playerOrder.length > 0) {
+          const index = roomState.playerOrder.indexOf(existingPlayerId);
+          if (index !== -1) {
+            roomState.playerOrder[index] = socket.id; // Reemplazar ID antiguo con nuevo
+          }
+        }
+        
         if (wasHost) {
           roomState.hostId = socket.id;
         }
@@ -470,6 +504,11 @@ io.on("connection", (socket) => {
           role: null,
           vote: null,
         });
+        
+        // Agregar al playerOrder solo si estamos en lobby
+        if (roomState.status === "lobby") {
+          roomState.playerOrder.push(socket.id);
+        }
       }
     }
 
@@ -543,6 +582,12 @@ io.on("connection", (socket) => {
 
     // Obtener rondas configuradas o usar 2 por defecto
     const maxRounds = data?.maxRounds || 2;
+
+    // Aleatorizar el orden de los jugadores al iniciar la partida
+    const playerIds = Array.from(roomState.players.keys());
+    roomState.playerOrder = shuffleArray(playerIds);
+    console.log(`Orden aleatorio de jugadores en sala ${roomName}:`, 
+      roomState.playerOrder.map(id => roomState.players.get(id)?.name).join(', '));
 
     // Reiniciar estado
     roomState.status = "playing";
@@ -700,6 +745,7 @@ io.on("connection", (socket) => {
     roomState.currentTurnIndex = 0;
     roomState.currentRound = 0;
     roomState.votes.clear();
+    roomState.playerOrder = []; // Limpiar orden para que se aleatorice en la próxima partida
 
     roomState.players.forEach((player) => {
       player.role = null;
@@ -751,6 +797,7 @@ io.on("connection", (socket) => {
     // Si el juego está en curso y quedan muy pocos jugadores, reiniciar
     if (roomState.status !== "lobby" && roomState.players.size < 3) {
       roomState.status = "lobby";
+      roomState.playerOrder = []; // Limpiar orden para que se aleatorice en la próxima partida
       io.to(roomName).emit("game-reset", {
         message: "Juego reiniciado: no hay suficientes jugadores",
       });
@@ -771,6 +818,14 @@ io.on("connection", (socket) => {
     if (player) {
       console.log(`${player.name} se desconectó de sala ${roomName}`);
       const wasHost = socket.id === roomState.hostId;
+      
+      // Si estamos en lobby, remover del playerOrder
+      if (roomState.status === "lobby") {
+        const index = roomState.playerOrder.indexOf(socket.id);
+        if (index !== -1) {
+          roomState.playerOrder.splice(index, 1);
+        }
+      }
       
       // Si el juego está en curso, guardar temporalmente al jugador para reconexión
       if (roomState.status !== "lobby" && player.role) {
@@ -816,6 +871,7 @@ io.on("connection", (socket) => {
       // Si el juego está en curso y quedan muy pocos jugadores, reiniciar
       if (roomState.status !== "lobby" && roomState.players.size < 3) {
         roomState.status = "lobby";
+        roomState.playerOrder = []; // Limpiar orden para que se aleatorice en la próxima partida
         io.to(roomName).emit("game-reset", {
           message: "Juego reiniciado por falta de jugadores",
         });

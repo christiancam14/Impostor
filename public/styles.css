@@ -655,6 +655,66 @@ button:disabled {
   color: #6b7280;
 }
 
+/* Lista de estado de votación de jugadores */
+.players-voting-status {
+  margin: 30px 0;
+  padding: 20px;
+  background: #f9fafb;
+  border-radius: 12px;
+}
+
+.players-voting-status h3 {
+  margin: 0 0 15px 0;
+  font-size: 1.2rem;
+  color: #333;
+}
+
+.players-voting-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.player-voting-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  background: white;
+  border-radius: 10px;
+  border: 2px solid #e5e7eb;
+  transition: all 0.3s ease;
+}
+
+.player-voting-item.voted {
+  border-color: #10b981;
+  background: #f0fdf4;
+}
+
+.player-voting-item.pending {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.player-voting-item .player-name {
+  font-weight: 600;
+  color: #333;
+  font-size: 1rem;
+}
+
+.player-voting-item .vote-indicator {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.player-voting-item .voted-indicator {
+  color: #10b981;
+}
+
+.player-voting-item .pending-indicator {
+  color: #f59e0b;
+}
+
 /* Results Screen */
 .results-content {
   text-align: center;
@@ -1135,6 +1195,27 @@ button:disabled {
   .vote-button {
     padding: 25px 20px;
     font-size: 1.2rem;
+  }
+  
+  .players-voting-status {
+    margin: 20px 0;
+    padding: 15px;
+  }
+  
+  .players-voting-status h3 {
+    font-size: 1.1rem;
+    margin-bottom: 12px;
+  }
+  
+  .player-voting-item {
+    padding: 12px 15px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .player-voting-item .vote-indicator {
+    font-size: 0.85rem;
   }
 
   .vote-status {

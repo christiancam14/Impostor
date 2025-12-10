@@ -182,6 +182,7 @@ const extraRoundStatus = document.getElementById('extra-round-status');
 // Elementos de votación
 const votingPlayers = document.getElementById('voting-players');
 const voteStatus = document.getElementById('vote-status');
+const playersVotingList = document.getElementById('players-voting-list');
 
 // Elementos de resultados
 const resultsMessage = document.getElementById('results-message');
@@ -322,6 +323,8 @@ function syncGameState(gameState, roleData) {
           };
           votingPlayers.appendChild(button);
         });
+        // Actualizar lista visual de jugadores
+        updatePlayersVotingList(gameState.players);
       }
       break;
       
@@ -707,7 +710,7 @@ function voteExtraRound(wantsExtraRound) {
     voteNoExtraButton.classList.add('selected');
   }
   
-  extraRoundStatus.innerHTML = `<p>✅ Has votado ${wantsExtraRound ? '<strong>SÍ</strong>' : '<strong>NO</strong>'}</p>`;
+  extraRoundStatus.innerHTML = `<p>✅ ${wantsExtraRound ? 'Has votado por <strong>una ronda más</strong>' : 'Has votado por <strong>votar ahora</strong>'}</p>`;
 }
 
 function enableExtraRoundButtons() {
@@ -751,6 +754,9 @@ function createVotingButtons(players) {
     button.onclick = () => voteForPlayer(player.id, button);
     votingPlayers.appendChild(button);
   });
+  
+  // Actualizar lista visual de jugadores
+  updatePlayersVotingList(players);
 }
 
 function voteForPlayer(playerId, button) {
@@ -776,6 +782,45 @@ function updateVoteStatus(players) {
   if (!clientState.hasVoted && clientState.currentScreen === 'voting') {
     voteStatus.innerHTML = `<p>⏳ ${votedPlayers}/${totalPlayers} jugadores han votado</p>`;
   }
+  
+  // Actualizar lista visual de jugadores
+  updatePlayersVotingList(players);
+}
+
+function updatePlayersVotingList(players) {
+  if (!playersVotingList) return;
+  
+  playersVotingList.innerHTML = '';
+  
+  players.forEach(player => {
+    const playerItem = document.createElement('div');
+    playerItem.className = 'player-voting-item';
+    
+    const hasVoted = player.vote !== null;
+    const isMe = player.id === clientState.playerId;
+    
+    if (hasVoted) {
+      playerItem.classList.add('voted');
+      const votedForPlayer = players.find(p => p.id === player.vote);
+      const votedForName = votedForPlayer ? votedForPlayer.name : 'Desconocido';
+      playerItem.innerHTML = `
+        <span class="player-name">${isMe ? '👤 ' : ''}${player.name}</span>
+        <span class="vote-indicator voted-indicator">
+          ✅ Votó por ${votedForName}
+        </span>
+      `;
+    } else {
+      playerItem.classList.add('pending');
+      playerItem.innerHTML = `
+        <span class="player-name">${isMe ? '👤 ' : ''}${player.name}</span>
+        <span class="vote-indicator pending-indicator">
+          ⏳ Esperando voto...
+        </span>
+      `;
+    }
+    
+    playersVotingList.appendChild(playerItem);
+  });
 }
 
 // =========================
