@@ -326,16 +326,25 @@ function selectRandomImpostor(roomState) {
 function getPlayersArray(roomState) {
   // Si hay un orden definido (durante el juego), usarlo
   if (roomState.playerOrder && roomState.playerOrder.length > 0) {
-    return roomState.playerOrder
+    const orderedPlayers = roomState.playerOrder
       .map(playerId => roomState.players.get(playerId))
       .filter(player => player !== undefined);
+    
+    // Si hay jugadores que no están en playerOrder (por ejemplo, se unieron después), agregarlos al final
+    const orderedIds = new Set(roomState.playerOrder);
+    const unorderedPlayers = Array.from(roomState.players.values())
+      .filter(player => !orderedIds.has(player.id));
+    
+    return [...orderedPlayers, ...unorderedPlayers];
   }
   // Si no hay orden (lobby), usar el orden del Map
   return Array.from(roomState.players.values());
 }
 
 function shuffleArray(array) {
+  if (!array || array.length === 0) return [];
   const shuffled = [...array];
+  // Usar Math.random() con seed para asegurar aleatoriedad
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
@@ -584,8 +593,17 @@ io.on("connection", (socket) => {
     const maxRounds = data?.maxRounds || 2;
 
     // Aleatorizar el orden de los jugadores al iniciar la partida
+    // Limpiar playerOrder primero para asegurar que no haya datos residuales
+    roomState.playerOrder = [];
     const playerIds = Array.from(roomState.players.keys());
-    roomState.playerOrder = shuffleArray(playerIds);
+    console.log(`IDs de jugadores antes de aleatorizar en sala ${roomName}:`, playerIds);
+    
+    // Aleatorizar múltiples veces para asegurar aleatoriedad
+    let shuffled = shuffleArray(playerIds);
+    // Hacer una segunda pasada de aleatorización para mayor aleatoriedad
+    shuffled = shuffleArray(shuffled);
+    
+    roomState.playerOrder = shuffled;
     console.log(`Orden aleatorio de jugadores en sala ${roomName}:`, 
       roomState.playerOrder.map(id => roomState.players.get(id)?.name).join(', '));
 

@@ -656,8 +656,9 @@ function updateGameScreen(state) {
     currentTurnEl.innerHTML = '<div class="waiting">Esperando...</div>';
   }
   
-  // Actualizar lista de jugadores
+  // Actualizar lista de jugadores (respetar el orden del servidor)
   gamePlayersList.innerHTML = '';
+  console.log('Orden de jugadores recibido del servidor:', state.players.map(p => p.name).join(', '));
   state.players.forEach(player => {
     const playerItem = document.createElement('div');
     playerItem.className = 'game-player-item';
