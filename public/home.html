@@ -186,8 +186,16 @@
     const joinRoomBtn = document.getElementById('join-room-btn');
 
     function sanitizeRoomName(name) {
+      if (!name || typeof name !== 'string') {
+        return null;
+      }
       // Solo permitir letras, números, guiones y guiones bajos
-      return name.toLowerCase().trim().replace(/[^a-z0-9-_]/g, '');
+      const sanitized = name.toLowerCase().trim().replace(/[^a-z0-9-_]/g, '');
+      // Validar longitud (3-20 caracteres)
+      if (sanitized.length < 3 || sanitized.length > 20) {
+        return null;
+      }
+      return sanitized;
     }
 
     // Función toast (misma que en client.js)
@@ -261,10 +269,10 @@
     // Event listeners con toasts
     createRoomBtn.addEventListener('click', () => {
       const roomName = sanitizeRoomName(createRoomInput.value);
-      if (roomName && roomName.length >= 3) {
+      if (roomName) {
         window.location.href = `/sala/${roomName}`;
       } else {
-        toast('Por favor ingresa un nombre válido (mínimo 3 caracteres, solo letras, números, - y _)', 'warning');
+        toast('El nombre de sala debe tener entre 3 y 20 caracteres y solo contener letras, números, guiones y guiones bajos', 'warning');
       }
     });
 
@@ -273,7 +281,7 @@
       if (roomName) {
         window.location.href = `/sala/${roomName}`;
       } else {
-        toast('Por favor ingresa un código válido', 'warning');
+        toast('El código de sala debe tener entre 3 y 20 caracteres y solo contener letras, números, guiones y guiones bajos', 'warning');
       }
     });
 

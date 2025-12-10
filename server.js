@@ -21,6 +21,134 @@ const PORT = process.env.PORT || 3002;
 // Mapa de salas - cada sala tiene su propio estado de juego
 const rooms = new Map();
 
+// =========================
+// FUNCIONES DE VALIDACIÓN Y SANITIZACIÓN
+// =========================
+
+/**
+ * Valida y sanitiza el nombre de un jugador
+ * @param {string} name - Nombre a validar
+ * @returns {object} - { valid: boolean, value: string|null, error: string|null }
+ */
+function validatePlayerName(name) {
+  if (!name || typeof name !== 'string') {
+    return { valid: false, value: null, error: 'El nombre es requerido' };
+  }
+  
+  const trimmed = name.trim();
+  
+  if (trimmed.length < 2) {
+    return { valid: false, value: null, error: 'El nombre debe tener al menos 2 caracteres' };
+  }
+  
+  if (trimmed.length > 20) {
+    return { valid: false, value: null, error: 'El nombre no puede tener más de 20 caracteres' };
+  }
+  
+  // Solo permitir letras, números, espacios y algunos caracteres especiales
+  if (!/^[a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ\s\-_]+$/.test(trimmed)) {
+    return { valid: false, value: null, error: 'El nombre solo puede contener letras, números, espacios y guiones' };
+  }
+  
+  return { valid: true, value: trimmed, error: null };
+}
+
+/**
+ * Sanitiza y valida el nombre de una sala
+ * @param {string} roomName - Nombre de sala a sanitizar
+ * @returns {string|null} - Nombre sanitizado o null si es inválido
+ */
+function sanitizeRoomName(roomName) {
+  if (!roomName || typeof roomName !== 'string') {
+    return null;
+  }
+  
+  // Convertir a minúsculas y eliminar caracteres especiales
+  const sanitized = roomName.toLowerCase().trim().replace(/[^a-z0-9-_]/g, '');
+  
+  // Validar longitud
+  if (sanitized.length < 3 || sanitized.length > 20) {
+    return null;
+  }
+  
+  return sanitized;
+}
+
+/**
+ * Valida el número de rondas
+ * @param {any} maxRounds - Número de rondas a validar
+ * @returns {object} - { valid: boolean, value: number|null, error: string|null }
+ */
+function validateMaxRounds(maxRounds) {
+  const num = parseInt(maxRounds);
+  
+  if (isNaN(num)) {
+    return { valid: false, value: null, error: 'El número de rondas debe ser un número válido' };
+  }
+  
+  if (num < 1) {
+    return { valid: false, value: null, error: 'El número de rondas debe ser al menos 1' };
+  }
+  
+  if (num > 10) {
+    return { valid: false, value: null, error: 'El número de rondas no puede ser mayor a 10' };
+  }
+  
+  return { valid: true, value: num, error: null };
+}
+
+/**
+ * Valida el número de impostores
+ * @param {any} numImpostors - Número de impostores a validar
+ * @param {number} totalPlayers - Número total de jugadores
+ * @returns {object} - { valid: boolean, value: number|null, error: string|null }
+ */
+function validateNumImpostors(numImpostors, totalPlayers) {
+  const num = parseInt(numImpostors);
+  
+  if (isNaN(num)) {
+    return { valid: false, value: null, error: 'El número de impostores debe ser un número válido' };
+  }
+  
+  if (num < 1) {
+    return { valid: false, value: null, error: 'Debe haber al menos 1 impostor' };
+  }
+  
+  if (num > 5) {
+    return { valid: false, value: null, error: 'No puede haber más de 5 impostores' };
+  }
+  
+  // Validar que quede al menos 1 jugador normal
+  if (num >= totalPlayers) {
+    return { valid: false, value: null, error: `No puede haber ${num} impostores con solo ${totalPlayers} jugadores. Debe quedar al menos 1 jugador normal.` };
+  }
+  
+  // Validar que no haya más impostores que jugadores normales
+  const maxImpostors = Math.floor(totalPlayers / 2);
+  if (num > maxImpostors) {
+    return { valid: false, value: null, error: `No puedes tener más de ${maxImpostors} ${maxImpostors === 1 ? 'impostor' : 'impostores'} con ${totalPlayers} jugadores` };
+  }
+  
+  return { valid: true, value: num, error: null };
+}
+
+/**
+ * Valida que un playerId exista en la sala
+ * @param {string} playerId - ID del jugador a validar
+ * @param {Map} players - Mapa de jugadores de la sala
+ * @returns {boolean}
+ */
+function validatePlayerId(playerId, players) {
+  if (!playerId || typeof playerId !== 'string') {
+    return false;
+  }
+  return players.has(playerId);
+}
+
+// Constantes de límites
+const MAX_PLAYERS_PER_ROOM = 20;
+const MAX_DISCONNECTED_PLAYERS = 10;
+
 // Lista de palabras secretas - Dataset expandido
 const secretWords = [
   // Animales (25)
@@ -291,8 +419,56 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "home.html"));
 });
 
-// Ruta de sala específica
+// Ruta de sala específica - con sanitización
 app.get("/sala/:roomName", (req, res) => {
+  const sanitizedRoomName = sanitizeRoomName(req.params.roomName);
+  
+  if (!sanitizedRoomName) {
+    return res.status(400).send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Error - Nombre de sala inválido</title>
+        <style>
+          body {
+            font-family: sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #7e22ce 100%);
+            color: white;
+            margin: 0;
+          }
+          .error-container {
+            text-align: center;
+            padding: 2rem;
+          }
+          h1 { font-size: 2rem; margin-bottom: 1rem; }
+          p { font-size: 1.2rem; margin-bottom: 2rem; }
+          a {
+            padding: 15px 30px;
+            background: white;
+            color: #667eea;
+            text-decoration: none;
+            border-radius: 10px;
+            font-weight: bold;
+            font-size: 1.1rem;
+            display: inline-block;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="error-container">
+          <h1>❌ Nombre de sala inválido</h1>
+          <p>El nombre de sala debe tener entre 3 y 20 caracteres y solo contener letras, números, guiones y guiones bajos.</p>
+          <a href="/">Volver al Inicio</a>
+        </div>
+      </body>
+      </html>
+    `);
+  }
+  
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
@@ -420,31 +596,54 @@ io.on("connection", (socket) => {
 
   // Unirse a una sala con nombre de jugador
   socket.on("join-game", (data) => {
+    // Validar que data sea un objeto
+    if (!data || typeof data !== 'object') {
+      socket.emit("error", { message: "Datos inválidos" });
+      return;
+    }
+    
     const { name, roomName } = data;
     
-    if (!roomName) {
-      socket.emit("error", { message: "Nombre de sala no proporcionado" });
+    // Validar y sanitizar nombre de sala
+    const sanitizedRoomName = sanitizeRoomName(roomName);
+    if (!sanitizedRoomName) {
+      socket.emit("error", { 
+        message: "Nombre de sala inválido. Debe tener entre 3 y 20 caracteres y solo contener letras, números, guiones y guiones bajos." 
+      });
       return;
     }
-
-    if (!name || name.trim() === "") {
-      socket.emit("error", { message: "Nombre inválido" });
+    
+    // Validar nombre de jugador
+    const nameValidation = validatePlayerName(name);
+    if (!nameValidation.valid) {
+      socket.emit("error", { message: nameValidation.error });
       return;
     }
+    
+    const validatedName = nameValidation.value;
 
     // Unirse a la sala de Socket.IO
-    socket.join(roomName);
-    socket.roomName = roomName;
+    socket.join(sanitizedRoomName);
+    socket.roomName = sanitizedRoomName;
 
     // Obtener o crear el estado de la sala
-    const roomState = getOrCreateRoom(roomName);
+    const roomState = getOrCreateRoom(sanitizedRoomName);
+    
+    // Validar límite de jugadores por sala
+    if (roomState.players.size >= MAX_PLAYERS_PER_ROOM) {
+      socket.emit("error", { 
+        message: `La sala está llena (máximo ${MAX_PLAYERS_PER_ROOM} jugadores)` 
+      });
+      socket.leave(sanitizedRoomName);
+      return;
+    }
 
     // Verificar si existe un jugador temporalmente desconectado con el mismo nombre
-    const disconnectedData = roomState.disconnectedPlayers.get(name.trim());
+    const disconnectedData = roomState.disconnectedPlayers.get(validatedName);
     
     if (disconnectedData) {
       // Reconexión de un jugador que se desconectó temporalmente
-      console.log(`${name} se está reconectando a la sala ${roomName} (rol preservado: ${disconnectedData.player.role})`);
+      console.log(`${validatedName} se está reconectando a la sala ${sanitizedRoomName} (rol preservado: ${disconnectedData.player.role})`);
       
       // Cancelar el timeout de eliminación
       if (disconnectedData.timeout) {
@@ -457,7 +656,7 @@ io.on("connection", (socket) => {
       // Restaurar el jugador con su rol y voto preservados
       roomState.players.set(socket.id, {
         id: socket.id,
-        name: name.trim(),
+        name: validatedName,
         role: disconnectedData.player.role,
         vote: disconnectedData.player.vote,
       });
@@ -476,25 +675,50 @@ io.on("connection", (socket) => {
         const impostorIndex = roomState.impostorIds.indexOf(disconnectedData.player.id);
         if (impostorIndex !== -1) {
           roomState.impostorIds[impostorIndex] = socket.id;
-          console.log(`${name} recuperó su rol de IMPOSTOR (ID actualizado)`);
+          console.log(`${validatedName} recuperó su rol de IMPOSTOR (ID actualizado)`);
         }
       }
       
-      // Si el jugador era el host, actualizar el hostId
+      // Si el jugador era el host, actualizar el hostId y notificar a todos
       if (disconnectedData.wasHost) {
+        const previousHostId = roomState.hostId;
         roomState.hostId = socket.id;
-        console.log(`${name} recuperó su posición como HOST`);
+        console.log(`${validatedName} recuperó su posición como HOST`);
+        
+        // Si había un host temporal, notificar que el host original regresó
+        if (previousHostId && previousHostId !== socket.id) {
+          const previousHostSocket = io.sockets.sockets.get(previousHostId);
+          if (previousHostSocket) {
+            previousHostSocket.emit('host-changed', {
+              newHostId: socket.id,
+              newHostName: validatedName,
+              message: 'El host original ha regresado'
+            });
+          }
+        }
+        
+        // Notificar a todos que el host original regresó
+        io.to(sanitizedRoomName).emit('host-changed', {
+          newHostId: socket.id,
+          newHostName: validatedName,
+          message: 'El host original ha regresado'
+        });
+        
+        // Notificar al host que recuperó su posición
+        socket.emit('you-are-host', {
+          message: 'Has recuperado tu posición como host de la sala'
+        });
       }
       
       // Eliminar de la lista de desconectados
-      roomState.disconnectedPlayers.delete(name.trim());
+      roomState.disconnectedPlayers.delete(validatedName);
     } else {
       // Verificar si ya existe un jugador conectado con el mismo nombre
       let existingPlayer = null;
       let existingPlayerId = null;
       
       for (const [playerId, player] of roomState.players.entries()) {
-        if (player.name === name.trim()) {
+        if (player.name === validatedName) {
           existingPlayer = player;
           existingPlayerId = playerId;
           break;
@@ -503,7 +727,7 @@ io.on("connection", (socket) => {
       
       if (existingPlayer && existingPlayerId !== socket.id) {
         // Jugador duplicado conectándose simultáneamente (reemplazar)
-        console.log(`${name} se está conectando nuevamente (reemplazando conexión anterior)`);
+        console.log(`${validatedName} se está conectando nuevamente (reemplazando conexión anterior)`);
         
         const preservedRole = existingPlayer.role;
         const preservedVote = existingPlayer.vote;
@@ -514,7 +738,7 @@ io.on("connection", (socket) => {
         
         roomState.players.set(socket.id, {
           id: socket.id,
-          name: name.trim(),
+          name: validatedName,
           role: preservedRole,
           vote: preservedVote,
         });
@@ -528,21 +752,46 @@ io.on("connection", (socket) => {
         }
         
         if (wasHost) {
+          const previousHostId = roomState.hostId;
           roomState.hostId = socket.id;
+          
+          // Si había un host temporal diferente, notificar que el host original regresó
+          if (previousHostId && previousHostId !== socket.id) {
+            const previousHostSocket = io.sockets.sockets.get(previousHostId);
+            if (previousHostSocket) {
+              previousHostSocket.emit('host-changed', {
+                newHostId: socket.id,
+                newHostName: validatedName,
+                message: 'El host original ha regresado'
+              });
+            }
+            
+            // Notificar a todos que el host original regresó
+            io.to(sanitizedRoomName).emit('host-changed', {
+              newHostId: socket.id,
+              newHostName: validatedName,
+              message: 'El host original ha regresado'
+            });
+          }
+          
+          // Notificar al host que recuperó su posición
+          socket.emit('you-are-host', {
+            message: 'Has recuperado tu posición como host de la sala'
+          });
         }
         
         if (wasImpostor && roomState.impostorIds) {
           const impostorIndex = roomState.impostorIds.indexOf(existingPlayerId);
           if (impostorIndex !== -1) {
             roomState.impostorIds[impostorIndex] = socket.id;
-            console.log(`${name} recuperó su rol de IMPOSTOR (ID actualizado en conexión duplicada)`);
+            console.log(`${validatedName} recuperó su rol de IMPOSTOR (ID actualizado en conexión duplicada)`);
           }
         }
       } else {
         // Jugador completamente nuevo
         roomState.players.set(socket.id, {
           id: socket.id,
-          name: name.trim(),
+          name: validatedName,
           role: null,
           vote: null,
         });
@@ -563,17 +812,17 @@ io.on("connection", (socket) => {
       if (!currentHostSocket || !currentHostPlayer) {
         // El host actual ya no existe, limpiar para asignar uno nuevo
         roomState.hostId = null;
-        console.log(`Host anterior ya no existe en sala ${roomName}, se asignará uno nuevo`);
+        console.log(`Host anterior ya no existe en sala ${sanitizedRoomName}, se asignará uno nuevo`);
       }
     }
 
     // Asignar como host si es el primer jugador o si el hostId actual es null
     if (roomState.hostId === null) {
       roomState.hostId = socket.id;
-      console.log(`${name} es el HOST de la sala: ${roomName}`);
+      console.log(`${validatedName} es el HOST de la sala: ${sanitizedRoomName}`);
     }
 
-    console.log(`${name} se unió a la sala: ${roomName}`);
+    console.log(`${validatedName} se unió a la sala: ${sanitizedRoomName}`);
     
     // Preparar datos del rol si el juego está en curso
     let roleData = null;
@@ -593,9 +842,9 @@ io.on("connection", (socket) => {
     // Enviar estado de conexión exitosa con el estado actual del juego Y el rol
     socket.emit("join-success", { 
       id: socket.id, 
-      name: name.trim(),
+      name: validatedName,
       isHost: socket.id === roomState.hostId,
-      roomName: roomName,
+      roomName: sanitizedRoomName,
       // Enviar rol si está disponible (INCLUIDO EN join-success para evitar problemas de timing)
       role: roleData,
       // Enviar estado actual del juego para sincronización
@@ -608,13 +857,13 @@ io.on("connection", (socket) => {
       }
     });
     
-    broadcastGameState(roomName);
+    broadcastGameState(sanitizedRoomName);
     
     // Si el juego está en curso, forzar sincronización inmediata después de unirse
     if (roomState.status !== "lobby") {
       // Enviar estado completo inmediatamente para asegurar sincronización
       setTimeout(() => {
-        broadcastGameState(roomName);
+        broadcastGameState(sanitizedRoomName);
       }, 100);
     }
   });
@@ -622,10 +871,16 @@ io.on("connection", (socket) => {
   // Iniciar juego - SOLO HOST
   socket.on("start-game", (data) => {
     const roomName = socket.roomName;
-    if (!roomName) return;
+    if (!roomName) {
+      socket.emit("error", { message: "No estás en una sala válida" });
+      return;
+    }
 
     const roomState = rooms.get(roomName);
-    if (!roomState) return;
+    if (!roomState) {
+      socket.emit("error", { message: "La sala no existe" });
+      return;
+    }
 
     // Verificar que sea el host
     if (socket.id !== roomState.hostId) {
@@ -639,35 +894,31 @@ io.on("connection", (socket) => {
     }
 
     if (roomState.players.size < 3) {
-      socket.emit("error", { message: "Se necesitan al menos 3 jugadores" });
+      socket.emit("error", { message: "Se necesitan al menos 3 jugadores para iniciar" });
       return;
     }
 
+    // Validar número de rondas
+    const roundsValidation = validateMaxRounds(data?.maxRounds || roomState.maxRounds || 2);
+    if (!roundsValidation.valid) {
+      socket.emit("error", { message: roundsValidation.error });
+      return;
+    }
+    const maxRounds = roundsValidation.value;
+
     // Validar número de impostores
-    const numImpostors = data?.numImpostors || roomState.numImpostors || 1;
-    const minPlayersForImpostors = numImpostors + 1; // Al menos 1 jugador normal
-    
-    if (roomState.players.size < minPlayersForImpostors) {
-      socket.emit("error", { 
-        message: `Se necesitan al menos ${minPlayersForImpostors} jugadores para ${numImpostors} ${numImpostors === 1 ? 'impostor' : 'impostores'}` 
-      });
+    const impostorsValidation = validateNumImpostors(
+      data?.numImpostors || roomState.numImpostors || 1,
+      roomState.players.size
+    );
+    if (!impostorsValidation.valid) {
+      socket.emit("error", { message: impostorsValidation.error });
       return;
     }
-    
-    // Validar que no haya más impostores que jugadores normales
-    const maxImpostors = Math.floor(roomState.players.size / 2); // Máximo la mitad de jugadores
-    if (numImpostors > maxImpostors) {
-      socket.emit("error", { 
-        message: `No puedes tener más de ${maxImpostors} ${maxImpostors === 1 ? 'impostor' : 'impostores'} con ${roomState.players.size} jugadores` 
-      });
-      return;
-    }
+    const numImpostors = impostorsValidation.value;
     
     // Guardar número de impostores configurado
     roomState.numImpostors = numImpostors;
-
-    // Obtener rondas configuradas o usar 2 por defecto
-    const maxRounds = data?.maxRounds || 2;
 
     // Aleatorizar el orden de los jugadores al iniciar la partida
     // Limpiar playerOrder primero para asegurar que no haya datos residuales
@@ -716,14 +967,25 @@ io.on("connection", (socket) => {
   // Siguiente turno - SOLO HOST
   socket.on("next-turn", () => {
     const roomName = socket.roomName;
-    if (!roomName) return;
+    if (!roomName) {
+      socket.emit("error", { message: "No estás en una sala válida" });
+      return;
+    }
 
     const roomState = rooms.get(roomName);
-    if (!roomState || roomState.status !== "playing") return;
+    if (!roomState) {
+      socket.emit("error", { message: "La sala no existe" });
+      return;
+    }
 
     // Verificar que sea el host
     if (socket.id !== roomState.hostId) {
       socket.emit("error", { message: "Solo el host puede avanzar turnos" });
+      return;
+    }
+
+    if (roomState.status !== "playing") {
+      socket.emit("error", { message: "El juego no está en curso" });
       return;
     }
 
@@ -771,15 +1033,41 @@ io.on("connection", (socket) => {
   // Votar por ronda extra
   socket.on("vote-extra-round", (data) => {
     const roomName = socket.roomName;
-    if (!roomName) return;
+    if (!roomName) {
+      socket.emit("error", { message: "No estás en una sala válida" });
+      return;
+    }
 
     const roomState = rooms.get(roomName);
-    if (!roomState || roomState.status !== "extra-round-vote") return;
+    if (!roomState) {
+      socket.emit("error", { message: "La sala no existe" });
+      return;
+    }
+
+    if (roomState.status !== "extra-round-vote") {
+      socket.emit("error", { message: "No es momento de votar por ronda extra" });
+      return;
+    }
+
+    // Validar datos de entrada
+    if (!data || typeof data !== 'object') {
+      socket.emit("error", { message: "Datos de voto inválidos" });
+      return;
+    }
 
     const { wantsExtraRound } = data;
-    const player = roomState.players.get(socket.id);
+    
+    // Validar que wantsExtraRound sea un booleano
+    if (typeof wantsExtraRound !== 'boolean') {
+      socket.emit("error", { message: "El voto debe ser verdadero o falso" });
+      return;
+    }
 
-    if (!player) return;
+    const player = roomState.players.get(socket.id);
+    if (!player) {
+      socket.emit("error", { message: "Jugador no encontrado en la sala" });
+      return;
+    }
 
     roomState.extraRoundVotes.set(socket.id, wantsExtraRound);
     console.log(
@@ -819,18 +1107,47 @@ io.on("connection", (socket) => {
   // Votar por impostor
   socket.on("vote", (data) => {
     const roomName = socket.roomName;
-    if (!roomName) return;
+    if (!roomName) {
+      socket.emit("error", { message: "No estás en una sala válida" });
+      return;
+    }
 
     const roomState = rooms.get(roomName);
-    if (!roomState || roomState.status !== "voting") {
+    if (!roomState) {
+      socket.emit("error", { message: "La sala no existe" });
+      return;
+    }
+
+    if (roomState.status !== "voting") {
       socket.emit("error", { message: "No es momento de votar" });
       return;
     }
 
-    const { votedPlayerId } = data;
     const player = roomState.players.get(socket.id);
+    if (!player) {
+      socket.emit("error", { message: "Jugador no encontrado en la sala" });
+      return;
+    }
 
-    if (!player) return;
+    // Validar datos de entrada
+    if (!data || typeof data !== 'object') {
+      socket.emit("error", { message: "Datos de voto inválidos" });
+      return;
+    }
+
+    const { votedPlayerId } = data;
+    
+    // Validar que el ID del jugador votado sea válido
+    if (!validatePlayerId(votedPlayerId, roomState.players)) {
+      socket.emit("error", { message: "El jugador votado no existe en esta sala" });
+      return;
+    }
+
+    // No permitir votarse a sí mismo
+    if (votedPlayerId === socket.id) {
+      socket.emit("error", { message: "No puedes votar por ti mismo" });
+      return;
+    }
 
     player.vote = votedPlayerId;
     roomState.votes.set(socket.id, votedPlayerId);
@@ -851,10 +1168,16 @@ io.on("connection", (socket) => {
   // Reiniciar juego - SOLO HOST
   socket.on("reset-game", () => {
     const roomName = socket.roomName;
-    if (!roomName) return;
+    if (!roomName) {
+      socket.emit("error", { message: "No estás en una sala válida" });
+      return;
+    }
 
     const roomState = rooms.get(roomName);
-    if (!roomState) return;
+    if (!roomState) {
+      socket.emit("error", { message: "La sala no existe" });
+      return;
+    }
 
     // Verificar que sea el host
     if (socket.id !== roomState.hostId) {
@@ -884,18 +1207,44 @@ io.on("connection", (socket) => {
   // Expulsar jugador
   socket.on("kick-player", (data) => {
     const roomName = socket.roomName;
-    if (!roomName) return;
-
-    const roomState = rooms.get(roomName);
-    if (!roomState) return;
-
-    const { playerId } = data;
-    const kickedPlayer = roomState.players.get(playerId);
-
-    if (!kickedPlayer) {
-      socket.emit("error", { message: "Jugador no encontrado" });
+    if (!roomName) {
+      socket.emit("error", { message: "No estás en una sala válida" });
       return;
     }
+
+    const roomState = rooms.get(roomName);
+    if (!roomState) {
+      socket.emit("error", { message: "La sala no existe" });
+      return;
+    }
+
+    // Verificar que sea el host
+    if (socket.id !== roomState.hostId) {
+      socket.emit("error", { message: "Solo el host puede expulsar jugadores" });
+      return;
+    }
+
+    // Validar datos de entrada
+    if (!data || typeof data !== 'object') {
+      socket.emit("error", { message: "Datos inválidos" });
+      return;
+    }
+
+    const { playerId } = data;
+    
+    // Validar que el ID del jugador sea válido
+    if (!validatePlayerId(playerId, roomState.players)) {
+      socket.emit("error", { message: "El jugador no existe en esta sala" });
+      return;
+    }
+
+    // No permitir expulsarse a sí mismo
+    if (playerId === socket.id) {
+      socket.emit("error", { message: "No puedes expulsarte a ti mismo" });
+      return;
+    }
+
+    const kickedPlayer = roomState.players.get(playerId);
 
     const kickerPlayer = roomState.players.get(socket.id);
     console.log(
@@ -950,9 +1299,22 @@ io.on("connection", (socket) => {
         }
       }
       
-      // Si el juego está en curso, guardar temporalmente al jugador para reconexión
-      if (roomState.status !== "lobby" && player.role) {
-        console.log(`💾 Guardando estado de ${player.name} para posible reconexión (rol: ${player.role})`);
+      // Guardar temporalmente al jugador para reconexión (si era host o si el juego está en curso)
+      // Esto permite que el host recupere su posición al reconectarse
+      if (wasHost || (roomState.status !== "lobby" && player.role)) {
+        console.log(`💾 Guardando estado de ${player.name} para posible reconexión (rol: ${player.role || 'sin rol'}, host: ${wasHost})`);
+        
+        // Limitar tamaño de disconnectedPlayers para evitar acumulación de memoria
+        if (roomState.disconnectedPlayers.size >= MAX_DISCONNECTED_PLAYERS) {
+          // Eliminar el más antiguo (primero en el Map)
+          const oldestName = Array.from(roomState.disconnectedPlayers.keys())[0];
+          const oldestData = roomState.disconnectedPlayers.get(oldestName);
+          if (oldestData && oldestData.timeout) {
+            clearTimeout(oldestData.timeout);
+          }
+          roomState.disconnectedPlayers.delete(oldestName);
+          console.log(`🧹 Limpiando jugador desconectado antiguo: ${oldestName}`);
+        }
         
         // Guardar jugador temporalmente (60 segundos para reconectar)
         const timeout = setTimeout(() => {
@@ -970,30 +1332,73 @@ io.on("connection", (socket) => {
       // Eliminar de jugadores activos
       roomState.players.delete(socket.id);
 
-      // Si el host se desconecta, asignar nuevo host temporalmente o limpiar hostId
+      // Si el host se desconecta, manejar la transferencia de host
       if (wasHost) {
+        // Limpiar hostId temporalmente - se asignará nuevo host solo si es necesario
+        roomState.hostId = null;
+        
         if (roomState.players.size > 0) {
-          // Hay otros jugadores, asignar nuevo host
-          const newHostId = Array.from(roomState.players.keys())[0];
-          roomState.hostId = newHostId;
-          const newHost = roomState.players.get(newHostId);
-          console.log(`${newHost.name} es el nuevo HOST temporal de la sala ${roomName}`);
+          // Hay otros jugadores
+          // Si el host se guardó en disconnectedPlayers, esperar un momento antes de asignar nuevo host
+          // para dar tiempo a que el host se reconecte rápidamente (como al actualizar la página)
+          const hostCanReconnect = roomState.disconnectedPlayers.has(player.name);
           
-          // Notificar al nuevo host
-          const newHostSocket = io.sockets.sockets.get(newHostId);
-          if (newHostSocket) {
-            newHostSocket.emit('you-are-host', { 
-              message: '¡Ahora eres el host de la sala!' 
+          if (hostCanReconnect) {
+            // El host puede reconectarse, esperar un momento antes de asignar nuevo host
+            setTimeout(() => {
+              const roomStateCheck = rooms.get(roomName);
+              if (!roomStateCheck) return;
+              
+              // Solo asignar nuevo host si:
+              // 1. El host original aún no se reconectó (sigue en disconnectedPlayers)
+              // 2. No hay host asignado actualmente
+              // 3. Hay jugadores en la sala
+              const originalHostStillDisconnected = roomStateCheck.disconnectedPlayers.has(player.name);
+              
+              if (originalHostStillDisconnected && roomStateCheck.hostId === null && roomStateCheck.players.size > 0) {
+                const newHostId = Array.from(roomStateCheck.players.keys())[0];
+                roomStateCheck.hostId = newHostId;
+                const newHost = roomStateCheck.players.get(newHostId);
+                console.log(`${newHost.name} es el nuevo HOST temporal de la sala ${roomName}`);
+                
+                // Notificar al nuevo host
+                const newHostSocket = io.sockets.sockets.get(newHostId);
+                if (newHostSocket) {
+                  newHostSocket.emit('you-are-host', { 
+                    message: '¡Ahora eres el host de la sala!' 
+                  });
+                }
+                
+                io.to(roomName).emit('host-changed', {
+                  newHostId: newHostId,
+                  newHostName: newHost.name
+                });
+                
+                broadcastGameState(roomName);
+              }
+            }, 3000); // Esperar 3 segundos antes de asignar nuevo host (tiempo suficiente para reconexión rápida)
+          } else {
+            // El host no se guardó (probablemente salió completamente), asignar nuevo host inmediatamente
+            const newHostId = Array.from(roomState.players.keys())[0];
+            roomState.hostId = newHostId;
+            const newHost = roomState.players.get(newHostId);
+            console.log(`${newHost.name} es el nuevo HOST de la sala ${roomName}`);
+            
+            // Notificar al nuevo host
+            const newHostSocket = io.sockets.sockets.get(newHostId);
+            if (newHostSocket) {
+              newHostSocket.emit('you-are-host', { 
+                message: '¡Ahora eres el host de la sala!' 
+              });
+            }
+            
+            io.to(roomName).emit('host-changed', {
+              newHostId: newHostId,
+              newHostName: newHost.name
             });
           }
-          
-          io.to(roomName).emit('host-changed', {
-            newHostId: newHostId,
-            newHostName: newHost.name
-          });
         } else {
-          // Es el único jugador, limpiar hostId para que se asigne cuando se reconecte
-          roomState.hostId = null;
+          // Es el único jugador, hostId ya está en null, se asignará cuando se reconecte
           console.log(`Host desconectado y es el único jugador en sala ${roomName}, hostId limpiado`);
         }
       }
@@ -1013,6 +1418,12 @@ io.on("connection", (socket) => {
       if (roomState.players.size === 0) {
         setTimeout(() => {
           if (roomState.players.size === 0 && roomState.disconnectedPlayers.size === 0) {
+            // Limpiar todos los timeouts antes de eliminar
+            roomState.disconnectedPlayers.forEach((data) => {
+              if (data.timeout) {
+                clearTimeout(data.timeout);
+              }
+            });
             rooms.delete(roomName);
             console.log(`Sala ${roomName} eliminada (vacía)`);
           }
@@ -1140,6 +1551,12 @@ function calculateResults(roomName) {
 setInterval(() => {
   rooms.forEach((roomState, roomName) => {
     if (roomState.players.size === 0) {
+      // Limpiar todos los timeouts de jugadores desconectados antes de eliminar la sala
+      roomState.disconnectedPlayers.forEach((data) => {
+        if (data.timeout) {
+          clearTimeout(data.timeout);
+        }
+      });
       rooms.delete(roomName);
       console.log(`Sala ${roomName} eliminada automáticamente (inactiva)`);
     }
