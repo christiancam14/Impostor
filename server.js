@@ -5,7 +5,16 @@ const path = require("path");
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIO(server);
+const io = socketIO(server, {
+  pingTimeout: 60000, // 60 segundos - tiempo para considerar desconectado
+  pingInterval: 25000, // 25 segundos - intervalo de ping
+  transports: ['websocket', 'polling'], // Permitir ambos transportes
+  allowEIO3: true, // Compatibilidad con versiones antiguas
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
 
 const PORT = process.env.PORT || 3002;
 
@@ -563,6 +572,14 @@ io.on("connection", (socket) => {
     });
     
     broadcastGameState(roomName);
+    
+    // Si el juego está en curso, forzar sincronización inmediata después de unirse
+    if (roomState.status !== "lobby") {
+      // Enviar estado completo inmediatamente para asegurar sincronización
+      setTimeout(() => {
+        broadcastGameState(roomName);
+      }, 100);
+    }
   });
 
   // Iniciar juego - SOLO HOST
@@ -849,11 +866,11 @@ io.on("connection", (socket) => {
       if (roomState.status !== "lobby" && player.role) {
         console.log(`💾 Guardando estado de ${player.name} para posible reconexión (rol: ${player.role})`);
         
-        // Guardar jugador temporalmente (30 segundos para reconectar)
+        // Guardar jugador temporalmente (60 segundos para reconectar)
         const timeout = setTimeout(() => {
           console.log(`⏰ Tiempo de reconexión agotado para ${player.name}`);
           roomState.disconnectedPlayers.delete(player.name);
-        }, 30000); // 30 segundos para reconectar
+        }, 60000); // 60 segundos para reconectar (más tiempo para conexiones lentas)
         
         roomState.disconnectedPlayers.set(player.name, {
           player: { ...player }, // Copia del jugador con su rol

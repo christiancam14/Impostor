@@ -16,8 +16,15 @@ if (!roomName) {
   throw new Error('No hay sala válida'); // Detener completamente la ejecución del script
 }
 
-// Conectar al servidor Socket.IO
-const socket = io();
+// Conectar al servidor Socket.IO con configuración de reconexión
+const socket = io({
+  reconnection: true,
+  reconnectionDelay: 1000, // Esperar 1 segundo antes de reconectar
+  reconnectionDelayMax: 5000, // Máximo 5 segundos entre intentos
+  reconnectionAttempts: Infinity, // Intentar reconectar indefinidamente
+  timeout: 20000, // Timeout de conexión de 20 segundos
+  transports: ['websocket', 'polling'] // Permitir ambos transportes
+});
 
 // Estado del cliente
 const clientState = {
@@ -363,11 +370,54 @@ socket.on('connect', () => {
   }
 });
 
-socket.on('disconnect', () => {
-  console.log('Desconectado del servidor');
+socket.on('connect_error', (error) => {
+  console.error('Error de conexión:', error);
+  connectionText.textContent = 'Error de conexión';
+  toast('Error al conectar con el servidor. Intentando reconectar...', 'warning', 5000);
+});
+
+socket.on('disconnect', (reason) => {
+  console.log('Desconectado del servidor:', reason);
   connectionIndicator.classList.remove('connected');
   connectionIndicator.classList.add('disconnected');
   connectionText.textContent = 'Desconectado';
+  
+  // Si la desconexión fue por error del servidor, intentar reconectar
+  if (reason === 'io server disconnect') {
+    // El servidor desconectó el socket, necesitamos reconectar manualmente
+    socket.connect();
+  }
+});
+
+socket.on('reconnect', (attemptNumber) => {
+  console.log('Reconectado al servidor después de', attemptNumber, 'intentos');
+  connectionIndicator.classList.remove('disconnected');
+  connectionIndicator.classList.add('connected');
+  connectionText.textContent = 'Conectado';
+  
+  // Si estábamos en una partida, intentar reconectar automáticamente
+  if (clientState.playerName && clientState.roomName) {
+    console.log('Intentando reconectar a la sala...');
+    setTimeout(() => {
+      joinGame();
+    }, 500);
+  }
+});
+
+socket.on('reconnect_attempt', (attemptNumber) => {
+  console.log('Intento de reconexión', attemptNumber);
+  connectionText.textContent = `Reconectando... (${attemptNumber})`;
+});
+
+socket.on('reconnect_error', (error) => {
+  console.error('Error al reconectar:', error);
+  connectionText.textContent = 'Error al reconectar';
+});
+
+socket.on('reconnect_failed', () => {
+  console.error('Falló la reconexión después de múltiples intentos');
+  connectionText.textContent = 'Error de conexión';
+  toast('No se pudo reconectar al servidor. Por favor recarga la página.', 'error', 10000);
 });
 
 // =========================
