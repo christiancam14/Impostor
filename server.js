@@ -310,7 +310,8 @@ function getOrCreateRoom(roomName) {
       playerOrder: [], // Orden de los jugadores para los turnos (se aleatoriza al iniciar)
       status: "lobby",
       secretWord: null,
-      impostorId: null,
+      impostorIds: [], // Array de IDs de impostores (soporta múltiples impostores)
+      numImpostors: 1, // Número de impostores configurado por el host
       currentTurnIndex: 0,
       currentRound: 0,
       maxRounds: 2,
@@ -326,10 +327,27 @@ function getRandomWord() {
   return secretWords[Math.floor(Math.random() * secretWords.length)];
 }
 
-function selectRandomImpostor(roomState) {
+function selectRandomImpostors(roomState) {
   const playerIds = Array.from(roomState.players.keys());
-  if (playerIds.length < 2) return null;
-  return playerIds[Math.floor(Math.random() * playerIds.length)];
+  const numImpostors = roomState.numImpostors || 1;
+  
+  // Validar que haya suficientes jugadores
+  if (playerIds.length < numImpostors + 1) {
+    console.warn(`No hay suficientes jugadores para ${numImpostors} impostores. Usando 1 impostor.`);
+    return [playerIds[Math.floor(Math.random() * playerIds.length)]];
+  }
+  
+  // Validar que quede al menos 1 jugador normal
+  if (numImpostors >= playerIds.length) {
+    console.warn(`Demasiados impostores solicitados. Usando máximo ${playerIds.length - 1} impostores.`);
+    const maxImpostors = playerIds.length - 1;
+    const shuffled = shuffleArray([...playerIds]);
+    return shuffled.slice(0, maxImpostors);
+  }
+  
+  // Seleccionar impostores aleatoriamente
+  const shuffled = shuffleArray([...playerIds]);
+  return shuffled.slice(0, numImpostors);
 }
 
 function getPlayersArray(roomState) {
@@ -433,8 +451,8 @@ io.on("connection", (socket) => {
         clearTimeout(disconnectedData.timeout);
       }
       
-      // Verificar si este jugador era el impostor
-      const wasImpostor = disconnectedData.player.id === roomState.impostorId;
+      // Verificar si este jugador era un impostor
+      const wasImpostor = roomState.impostorIds && roomState.impostorIds.includes(disconnectedData.player.id);
       
       // Restaurar el jugador con su rol y voto preservados
       roomState.players.set(socket.id, {
@@ -453,10 +471,13 @@ io.on("connection", (socket) => {
         }
       }
       
-      // Si el jugador era el impostor, actualizar el impostorId
-      if (wasImpostor) {
-        roomState.impostorId = socket.id;
-        console.log(`${name} recuperó su rol de IMPOSTOR (ID actualizado)`);
+      // Si el jugador era un impostor, actualizar el impostorIds
+      if (wasImpostor && roomState.impostorIds) {
+        const impostorIndex = roomState.impostorIds.indexOf(disconnectedData.player.id);
+        if (impostorIndex !== -1) {
+          roomState.impostorIds[impostorIndex] = socket.id;
+          console.log(`${name} recuperó su rol de IMPOSTOR (ID actualizado)`);
+        }
       }
       
       // Si el jugador era el host, actualizar el hostId
@@ -487,7 +508,7 @@ io.on("connection", (socket) => {
         const preservedRole = existingPlayer.role;
         const preservedVote = existingPlayer.vote;
         const wasHost = roomState.hostId === existingPlayerId;
-        const wasImpostor = roomState.impostorId === existingPlayerId;
+        const wasImpostor = roomState.impostorIds && roomState.impostorIds.includes(existingPlayerId);
         
         roomState.players.delete(existingPlayerId);
         
@@ -510,9 +531,12 @@ io.on("connection", (socket) => {
           roomState.hostId = socket.id;
         }
         
-        if (wasImpostor) {
-          roomState.impostorId = socket.id;
-          console.log(`${name} recuperó su rol de IMPOSTOR (ID actualizado en conexión duplicada)`);
+        if (wasImpostor && roomState.impostorIds) {
+          const impostorIndex = roomState.impostorIds.indexOf(existingPlayerId);
+          if (impostorIndex !== -1) {
+            roomState.impostorIds[impostorIndex] = socket.id;
+            console.log(`${name} recuperó su rol de IMPOSTOR (ID actualizado en conexión duplicada)`);
+          }
         }
       } else {
         // Jugador completamente nuevo
@@ -606,6 +630,29 @@ io.on("connection", (socket) => {
       return;
     }
 
+    // Validar número de impostores
+    const numImpostors = data?.numImpostors || roomState.numImpostors || 1;
+    const minPlayersForImpostors = numImpostors + 1; // Al menos 1 jugador normal
+    
+    if (roomState.players.size < minPlayersForImpostors) {
+      socket.emit("error", { 
+        message: `Se necesitan al menos ${minPlayersForImpostors} jugadores para ${numImpostors} ${numImpostors === 1 ? 'impostor' : 'impostores'}` 
+      });
+      return;
+    }
+    
+    // Validar que no haya más impostores que jugadores normales
+    const maxImpostors = Math.floor(roomState.players.size / 2); // Máximo la mitad de jugadores
+    if (numImpostors > maxImpostors) {
+      socket.emit("error", { 
+        message: `No puedes tener más de ${maxImpostors} ${maxImpostors === 1 ? 'impostor' : 'impostores'} con ${roomState.players.size} jugadores` 
+      });
+      return;
+    }
+    
+    // Guardar número de impostores configurado
+    roomState.numImpostors = numImpostors;
+
     // Obtener rondas configuradas o usar 2 por defecto
     const maxRounds = data?.maxRounds || 2;
 
@@ -627,7 +674,7 @@ io.on("connection", (socket) => {
     // Reiniciar estado
     roomState.status = "playing";
     roomState.secretWord = getRandomWord();
-    roomState.impostorId = selectRandomImpostor(roomState);
+    roomState.impostorIds = selectRandomImpostors(roomState);
     roomState.currentTurnIndex = 0;
     roomState.currentRound = 1;
     roomState.maxRounds = maxRounds;
@@ -635,17 +682,15 @@ io.on("connection", (socket) => {
 
     // Asignar roles
     roomState.players.forEach((player, socketId) => {
-      player.role =
-        socketId === roomState.impostorId ? "impostor" : "normal";
+      player.role = roomState.impostorIds.includes(socketId) ? "impostor" : "normal";
       player.vote = null;
     });
 
+    const impostorNames = roomState.impostorIds.map(id => roomState.players.get(id)?.name).join(', ');
     console.log(
       `Juego iniciado en sala ${roomName}. Palabra: ${
         roomState.secretWord
-      }, Impostor: ${
-        roomState.players.get(roomState.impostorId).name
-      }, Rondas: ${maxRounds}`
+      }, Impostor${roomState.impostorIds.length > 1 ? 'es' : ''}: ${impostorNames}, Rondas: ${maxRounds}`
     );
 
     sendPlayerRoles(roomName);
@@ -681,10 +726,27 @@ io.on("connection", (socket) => {
       if (roomState.currentRound > roomState.maxRounds) {
         roomState.status = "extra-round-vote";
         roomState.extraRoundVotes.clear();
+        
+        // Preparar información inicial de votos para enviar al cliente
+        const initialVotesInfo = Array.from(roomState.players.entries()).map(([playerId, player]) => ({
+          id: playerId,
+          name: player.name,
+          hasVoted: false,
+          vote: null
+        }));
+        
         io.to(roomName).emit("ask-extra-round", {
           message: "¿Desean hacer una ronda más antes de votar?",
           currentRound: roomState.currentRound,
         });
+        
+        // Enviar estado inicial de votación
+        io.to(roomName).emit("extra-round-vote-update", {
+          voted: 0,
+          total: roomState.players.size,
+          players: initialVotesInfo
+        });
+        
         broadcastGameState(roomName);
         return;
       }
@@ -713,13 +775,26 @@ io.on("connection", (socket) => {
       } para ronda extra en sala ${roomName}`
     );
 
-    // Broadcast estado actualizado
+    // Broadcast estado actualizado con información detallada
     const totalVotes = roomState.extraRoundVotes.size;
     const totalPlayers = roomState.players.size;
+    
+    // Preparar información de votos para enviar al cliente
+    const votesInfo = Array.from(roomState.players.entries()).map(([playerId, player]) => {
+      const hasVoted = roomState.extraRoundVotes.has(playerId);
+      const vote = hasVoted ? roomState.extraRoundVotes.get(playerId) : null;
+      return {
+        id: playerId,
+        name: player.name,
+        hasVoted: hasVoted,
+        vote: vote // true = quiere ronda extra, false = votar ahora, null = no ha votado
+      };
+    });
 
     io.to(roomName).emit("extra-round-vote-update", {
       voted: totalVotes,
       total: totalPlayers,
+      players: votesInfo
     });
 
     // Si todos votaron, calcular resultado
@@ -776,7 +851,7 @@ io.on("connection", (socket) => {
 
     roomState.status = "lobby";
     roomState.secretWord = null;
-    roomState.impostorId = null;
+    roomState.impostorIds = [];
     roomState.currentTurnIndex = 0;
     roomState.currentRound = 0;
     roomState.votes.clear();
@@ -990,30 +1065,39 @@ function calculateResults(roomName) {
     }
   });
 
-  // Buscar al impostor
-  let impostor = roomState.players.get(roomState.impostorId);
+  // Buscar a los impostores
+  const impostorIds = roomState.impostorIds || [];
+  const impostors = impostorIds
+    .map(id => roomState.players.get(id))
+    .filter(p => p !== undefined);
   
-  // Si el impostor no se encuentra (reconexión fallida), buscarlo por rol
-  if (!impostor) {
-    console.log('⚠️ ADVERTENCIA: impostorId no encontrado, buscando por rol...');
+  // Si no se encuentran impostores (reconexión fallida), buscarlos por rol
+  if (impostors.length === 0) {
+    console.log('⚠️ ADVERTENCIA: impostorIds no encontrados, buscando por rol...');
+    const foundImpostors = [];
     for (const [playerId, player] of roomState.players.entries()) {
       if (player.role === 'impostor') {
-        impostor = player;
-        roomState.impostorId = playerId; // Actualizar el ID
-        console.log(`Impostor encontrado: ${player.name} (ID: ${playerId})`);
-        break;
+        foundImpostors.push({ id: playerId, player });
+        if (!roomState.impostorIds.includes(playerId)) {
+          roomState.impostorIds.push(playerId);
+        }
       }
     }
+    impostors.push(...foundImpostors.map(f => f.player));
+    console.log(`Impostores encontrados: ${impostors.map(p => p.name).join(', ')}`);
   }
   
   const mostVoted = roomState.players.get(mostVotedId);
-  const impostorWon = mostVotedId !== roomState.impostorId;
+  // El impostor gana si el más votado NO es un impostor
+  const impostorWon = !impostorIds.includes(mostVotedId);
   
-  const impostorName = impostor?.name || 'Desconocido';
+  const impostorNames = impostors.map(p => p.name).join(', ') || 'Desconocido';
+  const impostorText = impostors.length > 1 ? 'impostores' : 'impostor';
 
   const results = {
-    impostorId: roomState.impostorId,
-    impostorName: impostorName,
+    impostorIds: impostorIds,
+    impostorNames: impostorNames,
+    numImpostors: impostors.length,
     secretWord: roomState.secretWord,
     mostVotedId: mostVotedId,
     mostVotedName: mostVoted?.name || 'Nadie',
@@ -1024,8 +1108,8 @@ function calculateResults(roomName) {
     })),
     impostorWon,
     message: impostorWon
-      ? `¡El impostor (${impostorName}) ganó! Engañaron al grupo.`
-      : `¡Atraparon al impostor (${impostorName})! Los jugadores ganaron.`,
+      ? `¡Los ${impostorText} (${impostorNames}) ganaron! Engañaron al grupo.`
+      : `¡Atraparon ${impostors.length > 1 ? 'a los impostores' : 'al impostor'} (${impostorNames})! Los jugadores ganaron.`,
   };
 
   io.to(roomName).emit("game-results", results);

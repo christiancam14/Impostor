@@ -81,6 +81,18 @@
               </label>
             </div>
             
+            <!-- Selector de impostores -->
+            <div class="impostors-selector">
+              <label for="impostors-input">
+                <span class="impostors-label">Número de impostores:</span>
+                <select id="impostors-input" class="impostors-select">
+                  <option value="1" selected>1 impostor</option>
+                  <option value="2">2 impostores</option>
+                  <option value="3">3 impostores</option>
+                </select>
+              </label>
+            </div>
+            
             <button id="start-game-button" class="btn-primary">Iniciar Juego</button>
           </div>
         </div>
@@ -134,6 +146,12 @@
         <div class="extra-round-content">
           <h2>¿Desean hacer una ronda más antes de votar?</h2>
           <p class="extra-round-description">Si no tienen claro quién es el impostor, pueden jugar una ronda adicional</p>
+          
+          <!-- Lista de estado de votación de jugadores -->
+          <div class="players-extra-round-status">
+            <h3>Estado de Votación</h3>
+            <div id="players-extra-round-list" class="players-voting-list"></div>
+          </div>
           
           <div class="extra-round-buttons">
             <button id="vote-yes-extra" class="btn-extra-round btn-no">
@@ -189,7 +207,7 @@
           
           <div class="results-info">
             <div class="result-item">
-              <h3>🔍 El Impostor Era:</h3>
+              <h3 id="impostor-label">🔍 El Impostor Era:</h3>
               <p id="impostor-reveal" class="highlight"></p>
             </div>
             

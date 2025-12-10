@@ -172,6 +172,7 @@ const playersList = document.getElementById('players-list');
 const startGameButton = document.getElementById('start-game-button');
 const changeNameButton = document.getElementById('change-name-button');
 const roundsInput = document.getElementById('rounds-input');
+const impostorsInput = document.getElementById('impostors-input');
 
 // Elementos del juego
 const roleDisplay = document.getElementById('role-display');
@@ -185,6 +186,7 @@ const gamePlayersList = document.getElementById('game-players-list');
 const voteYesExtraButton = document.getElementById('vote-yes-extra');
 const voteNoExtraButton = document.getElementById('vote-no-extra');
 const extraRoundStatus = document.getElementById('extra-round-status');
+const playersExtraRoundList = document.getElementById('players-extra-round-list');
 
 // Elementos de votación
 const votingPlayers = document.getElementById('voting-players');
@@ -303,6 +305,16 @@ function syncGameState(gameState, roleData) {
       showScreen('extraRound');
       // Reiniciar estado de votación extra
       extraRoundStatus.innerHTML = '<p>⏳ Esperando a que todos voten...</p>';
+      // Mostrar lista inicial de jugadores (todos en gris hasta que voten)
+      if (gameState.players && playersExtraRoundList) {
+        const initialPlayers = gameState.players.map(p => ({
+          id: p.id,
+          name: p.name,
+          hasVoted: false,
+          vote: null
+        }));
+        updateExtraRoundPlayersList(initialPlayers);
+      }
       break;
       
     case 'voting':
@@ -523,7 +535,11 @@ startGameButton.addEventListener('click', () => {
   }
   
   const selectedRounds = parseInt(roundsInput.value);
-  socket.emit('start-game', { maxRounds: selectedRounds });
+  const selectedImpostors = parseInt(impostorsInput.value) || 1;
+  socket.emit('start-game', { 
+    maxRounds: selectedRounds,
+    numImpostors: selectedImpostors
+  });
 });
 
 changeNameButton.addEventListener('click', () => {
@@ -584,6 +600,10 @@ socket.on('game-state-update', (state) => {
       showScreen('voting');
       clientState.hasVoted = false;
       createVotingButtons(state.players);
+      // Mostrar lista inicial de jugadores (todos en gris hasta que voten)
+      if (state.players) {
+        updatePlayersVotingList(state.players);
+      }
     }
     updateVoteStatus(state.players);
   } else if (state.status === 'results') {
@@ -661,6 +681,8 @@ function updateHostControls() {
   
   // Selector de rondas - Solo visible si es host Y el juego está en lobby
   const roundsSelector = document.querySelector('.rounds-selector');
+  const impostorsSelector = document.querySelector('.impostors-selector');
+  
   if (roundsSelector) {
     if (isHost && gameStatus === 'lobby') {
       roundsSelector.style.display = 'block';
@@ -669,9 +691,22 @@ function updateHostControls() {
     }
   }
   
+  if (impostorsSelector) {
+    if (isHost && gameStatus === 'lobby') {
+      impostorsSelector.style.display = 'block';
+    } else {
+      impostorsSelector.style.display = 'none';
+    }
+  }
+  
   // Selector de rondas (input)
   if (roundsInput) {
     roundsInput.disabled = !isHost;
+  }
+  
+  // Selector de impostores (input)
+  if (impostorsInput) {
+    impostorsInput.disabled = !isHost;
   }
 }
 
@@ -772,8 +807,15 @@ function enableExtraRoundButtons() {
 }
 
 socket.on('extra-round-vote-update', (data) => {
-  if (!clientState.hasVoted && clientState.currentScreen === 'extraRound') {
-    extraRoundStatus.innerHTML = `<p>⏳ ${data.voted}/${data.total} jugadores han votado</p>`;
+  if (clientState.currentScreen === 'extraRound') {
+    if (!clientState.hasVoted) {
+      extraRoundStatus.innerHTML = `<p>⏳ ${data.voted}/${data.total} jugadores han votado</p>`;
+    }
+    
+    // Actualizar lista visual de jugadores
+    if (data.players && playersExtraRoundList) {
+      updateExtraRoundPlayersList(data.players);
+    }
   }
 });
 
@@ -844,33 +886,62 @@ function updatePlayersVotingList(players) {
   playersVotingList.innerHTML = '';
   
   players.forEach(player => {
-    const playerItem = document.createElement('div');
-    playerItem.className = 'player-voting-item';
+    const playerPill = document.createElement('div');
+    playerPill.className = 'player-pill';
     
     const hasVoted = player.vote !== null;
     const isMe = player.id === clientState.playerId;
     
+    // Clases según el estado
     if (hasVoted) {
-      playerItem.classList.add('voted');
-      const votedForPlayer = players.find(p => p.id === player.vote);
-      const votedForName = votedForPlayer ? votedForPlayer.name : 'Desconocido';
-      playerItem.innerHTML = `
-        <span class="player-name">${isMe ? '👤 ' : ''}${player.name}</span>
-        <span class="vote-indicator voted-indicator">
-          ✅ Votó por ${votedForName}
-        </span>
-      `;
+      // Votó (verde)
+      playerPill.classList.add('pill-green');
     } else {
-      playerItem.classList.add('pending');
-      playerItem.innerHTML = `
-        <span class="player-name">${isMe ? '👤 ' : ''}${player.name}</span>
-        <span class="vote-indicator pending-indicator">
-          ⏳ Esperando voto...
-        </span>
-      `;
+      // No ha votado (gris)
+      playerPill.classList.add('pill-gray');
     }
     
-    playersVotingList.appendChild(playerItem);
+    if (isMe) {
+      playerPill.classList.add('pill-me');
+    }
+    
+    playerPill.textContent = player.name;
+    playersVotingList.appendChild(playerPill);
+  });
+}
+
+function updateExtraRoundPlayersList(players) {
+  if (!playersExtraRoundList) return;
+  
+  playersExtraRoundList.innerHTML = '';
+  
+  players.forEach(player => {
+    const playerPill = document.createElement('div');
+    playerPill.className = 'player-pill';
+    
+    const hasVoted = player.hasVoted;
+    const isMe = player.id === clientState.playerId;
+    
+    // Clases según el estado
+    if (hasVoted) {
+      if (player.vote) {
+        // Votó por una ronda más (rojo)
+        playerPill.classList.add('pill-red');
+      } else {
+        // Votó por votar ahora (verde)
+        playerPill.classList.add('pill-green');
+      }
+    } else {
+      // No ha votado (gris)
+      playerPill.classList.add('pill-gray');
+    }
+    
+    if (isMe) {
+      playerPill.classList.add('pill-me');
+    }
+    
+    playerPill.textContent = player.name;
+    playersExtraRoundList.appendChild(playerPill);
   });
 }
 
@@ -1005,8 +1076,15 @@ socket.on('game-results', (results) => {
     setTimeout(() => activateDarknessEffect(), 300);
   }
   
-  // Revelar impostor
-  impostorReveal.textContent = results.impostorName;
+  // Revelar impostor(es)
+  const impostorLabel = document.getElementById('impostor-label');
+  if (impostorLabel) {
+    const numImpostors = results.numImpostors || (results.impostorNames ? results.impostorNames.split(', ').length : 1);
+    impostorLabel.textContent = numImpostors > 1 
+      ? `🔍 Los Impostores Eran:` 
+      : `🔍 El Impostor Era:`;
+  }
+  impostorReveal.textContent = results.impostorNames || results.impostorName || 'Desconocido';
   
   // Revelar palabra
   wordReveal.textContent = results.secretWord;
